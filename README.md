@@ -13,6 +13,14 @@ Stack: Laravel 13 (PHP 8.5), Inertia and Vue 3, Tailwind 4, Laravel Reverb (WebS
 
 ## Setup
 
+Copy the config and fill in the blanks before the first `make setup`:
+
+```
+cp .environment/.env.local.example .environment/.env.local
+```
+
+`APP_KEY` is `base64:` plus 32 random bytes in base64 (`echo "base64:$(openssl rand -base64 32)"`). Reverb's `REVERB_APP_KEY` and `REVERB_APP_SECRET` can be any random strings, and `VITE_REVERB_APP_KEY` must equal `REVERB_APP_KEY`. Web push stays off until the `VAPID_*` keys are set; generate them with `Minishlink\WebPush\VAPID::createVapidKeys()`.
+
 ```shell
 make setup
 ```
