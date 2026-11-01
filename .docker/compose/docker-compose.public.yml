@@ -1,0 +1,39 @@
+# Layered on top of docker-compose.local.yml by `make public`: puts the running stack online through a
+# Cloudflare quick tunnel (random https://<name>.trycloudflare.com address, no account needed) and turns
+# debug output off while strangers can reach it. `make public-stop` drops this file again.
+
+x-public-env: &public-env
+  environment:
+    - APP_SLUG=${APP_SLUG}
+    - SERVER_DOMAIN=${SERVER_DOMAIN:-localhost}
+    - LAN_IP=${LAN_IP:-}
+    - APP_DEBUG=false
+    - LOG_LEVEL=info
+
+services:
+
+  cli:
+    <<: *public-env
+
+  frontend:
+    <<: *public-env
+
+  reverb:
+    <<: *public-env
+
+  worker:
+    <<: *public-env
+
+  scheduler:
+    <<: *public-env
+
+  tunnel:
+    container_name: ${APP_SLUG}_${APP_ENV}_tunnel
+    image: cloudflare/cloudflared:latest
+    # Cloudflare terminates HTTPS and forwards to the shared Traefik, which routes *.trycloudflare.com here
+    command: [ 'tunnel', '--no-autoupdate', '--url', 'http://traefik:80' ]
+    restart: unless-stopped
+    networks:
+      - traefik_network
+    labels:
+      - docker-compose.pwd=${PWD}

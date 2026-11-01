@@ -1,0 +1,9 @@
+{
+    "name": "Bomb Busters",
+    "short_name": "Bomb Busters",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#bfeaff",
+    "theme_color": "#bfeaff",
+    "icons": [{ "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }]
+}

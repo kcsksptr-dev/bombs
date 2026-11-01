@@ -1,0 +1,329 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../js/**/*.vue';
+@source '../js/**/*.js';
+
+/*
+ * Toy-box design system: thick ink outlines, chunky drop shadows that "press" on tap,
+ * candy colours on a sunny sky. Use the component classes below instead of ad-hoc styling.
+ */
+@theme {
+    --font-sans: 'Fredoka', ui-rounded, 'Nunito', system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+
+    --color-ink: #2b2550;
+    --color-ink-soft: #6b6491;
+    --color-cream: #fff8ec;
+    --color-cloud: #eef4ff;
+    --color-sky: #4cc3ff;
+    --color-sky-soft: #d4f0ff;
+    --color-sun: #ffcb3d;
+    --color-sun-soft: #fff1c4;
+    --color-tangerine: #ff9f43;
+    --color-berry: #ff5d8f;
+    --color-berry-soft: #ffe0ea;
+    --color-mint: #4fdc9b;
+    --color-mint-soft: #d8f8e8;
+    --color-grape: #9d7bff;
+    --color-lilac: #e9e1ff;
+
+    --animate-wiggle: wiggle 0.9s ease-in-out infinite;
+    --animate-pop: pop 0.35s ease-out;
+    --animate-sheet: sheet 0.25s ease-out;
+    --animate-shake: shake 0.5s ease-in-out;
+    --animate-flash: flash 0.8s ease-out forwards;
+    --animate-burst: burst 1.3s ease-out forwards;
+    --animate-snip: snip 0.5s ease-in-out 2;
+
+    @keyframes wiggle {
+        0%, 100% { transform: rotate(-2deg) scale(1); }
+        50% { transform: rotate(2deg) scale(1.03); }
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        15% { transform: translateX(-10px) rotate(-1deg); }
+        30% { transform: translateX(9px) rotate(1deg); }
+        45% { transform: translateX(-7px); }
+        60% { transform: translateX(5px); }
+        75% { transform: translateX(-3px); }
+    }
+
+    @keyframes flash {
+        0% { opacity: 0; }
+        20% { opacity: 1; }
+        100% { opacity: 0; }
+    }
+
+    @keyframes burst {
+        0% { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+        25% { transform: scale(1.25) rotate(6deg); opacity: 1; }
+        45% { transform: scale(1) rotate(0deg); }
+        80% { opacity: 1; }
+        100% { transform: scale(1.1) translateY(-20px); opacity: 0; }
+    }
+
+    @keyframes snip {
+        0%, 100% { transform: rotate(0deg); }
+        25% { transform: rotate(-25deg); }
+        50% { transform: rotate(10deg); }
+        75% { transform: rotate(-20deg); }
+    }
+
+    @keyframes spark {
+        0% { transform: translate(0, 0) scale(0.4); opacity: 1; }
+        100% { transform: translate(var(--dx), var(--dy)) scale(1.1); opacity: 0; }
+    }
+
+    @keyframes confetti {
+        0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+        100% { transform: translateY(105vh) rotate(var(--spin)); opacity: 0.8; }
+    }
+
+    @keyframes sheet {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+
+    @keyframes pop {
+        0% { transform: scale(0.85); opacity: 0; }
+        70% { transform: scale(1.05); opacity: 1; }
+        100% { transform: scale(1); }
+    }
+}
+
+@layer base {
+    body {
+        background-color: #c9eeff;
+        background-image:
+            radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.55) 1.5px, transparent 0),
+            linear-gradient(180deg, #bfeaff 0%, #e4f6ff 45%, #fff4dc 100%);
+        background-size: 22px 22px, 100% 100%;
+        background-attachment: fixed;
+    }
+}
+
+@layer base {
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+        }
+    }
+}
+
+@layer components {
+    .card {
+        @apply rounded-3xl border-[3px] border-ink bg-white p-4 shadow-[0_6px_0_var(--color-ink)];
+    }
+
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-2xl border-[3px] border-ink px-4 py-3 text-lg font-semibold text-ink shadow-[0_5px_0_var(--color-ink)] transition-[transform,box-shadow] duration-75 select-none active:translate-y-1 active:shadow-[0_1px_0_var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:translate-y-0 disabled:active:shadow-[0_5px_0_var(--color-ink)];
+    }
+
+    .btn-sm {
+        @apply rounded-xl border-2 px-2.5 py-1 text-sm shadow-[0_3px_0_var(--color-ink)] active:shadow-[0_0_0_var(--color-ink)];
+    }
+
+    .input {
+        @apply w-full rounded-2xl border-[3px] border-ink bg-cloud px-4 py-3 text-lg text-ink outline-none placeholder:text-ink-soft/60 focus:bg-white focus:ring-4 focus:ring-sun;
+    }
+
+    .chip {
+        @apply inline-flex items-center gap-1 rounded-full border-2 border-ink px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-ink;
+    }
+
+    .label {
+        @apply text-sm font-semibold text-ink-soft;
+    }
+
+    .heading {
+        @apply text-xl font-bold text-ink;
+    }
+}
+
+/* === wire tiles (WireTile.vue) === */
+/*
+ * A wire tile is drawn as an insulated cable plugged into two metal terminals. The <button> itself is
+ * transparent; .wire-cable (one piece, or two when cut), .wire-cap and .wire-label are stacked inside.
+ */
+@layer components {
+    .wire-tile {
+        --cap: 9px;
+        --inset: 5px;
+        --wire-base: var(--color-lilac);
+        --wire-dark: #b9a6f2;
+        --wire-light: #ffffff;
+        --wire-text: rgb(43 37 80 / 0.7);
+        position: relative;
+        border-radius: 0.6rem;
+        color: var(--wire-text);
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .wire-tile--lg {
+        --cap: 13px;
+        --inset: 7px;
+    }
+
+    .wire-blue {
+        --wire-base: var(--color-sky);
+        --wire-dark: #1e8fd0;
+        --wire-light: #c9efff;
+        --wire-text: #fff;
+    }
+
+    .wire-yellow {
+        --wire-base: var(--color-sun);
+        --wire-dark: #e09a00;
+        --wire-light: #fff4c7;
+        --wire-text: var(--color-ink);
+    }
+
+    .wire-red {
+        --wire-base: var(--color-berry);
+        --wire-dark: #d42e63;
+        --wire-light: #ffd0df;
+        --wire-text: #fff;
+    }
+
+    /* Insulation: a rounded tube with a dark edge, a glossy highlight stripe and an ink outline */
+    .wire-cable {
+        position: absolute;
+        top: calc(var(--cap) - 3px);
+        bottom: calc(var(--cap) - 3px);
+        left: var(--inset);
+        right: var(--inset);
+        border: 2px solid var(--color-ink);
+        border-block-width: 0;
+        background: linear-gradient(90deg, var(--wire-dark) 0%, var(--wire-base) 24%, var(--wire-light) 38%, var(--wire-base) 52%, var(--wire-base) 70%, var(--wire-dark) 100%);
+    }
+
+    .wire-hidden .wire-cable {
+        background:
+            linear-gradient(90deg, rgb(43 37 80 / 0.18) 0%, transparent 25%, rgb(255 255 255 / 0.7) 38%, transparent 52%, transparent 70%, rgb(43 37 80 / 0.22) 100%),
+            repeating-linear-gradient(-35deg, var(--color-lilac) 0 4px, #cbb8ff 4px 7px);
+    }
+
+    /* Cut: the cable is snipped in two, each end showing copper strands */
+    .wire-cut .wire-cable--top {
+        bottom: 48%;
+        border-bottom-width: 2px;
+        border-radius: 0 0 3px 3px;
+    }
+
+    .wire-cut .wire-cable--bottom {
+        top: 68%;
+        border-top-width: 2px;
+        border-radius: 3px 3px 0 0;
+    }
+
+    .wire-cable--top::after,
+    .wire-cable--bottom::after {
+        content: '';
+        position: absolute;
+        left: 22%;
+        right: 22%;
+        height: 4px;
+        background: repeating-linear-gradient(90deg, #e98a3a 0 2px, #a4521d 2px 3px);
+        border: 1px solid #6b3412;
+        border-radius: 2px;
+    }
+
+    .wire-cable--top::after {
+        bottom: -5px;
+    }
+
+    .wire-cable--bottom::after {
+        top: -5px;
+    }
+
+    /* Metal terminal caps with a little screw */
+    .wire-cap {
+        position: absolute;
+        left: 1px;
+        right: 1px;
+        height: var(--cap);
+        z-index: 1;
+        border: 2px solid var(--color-ink);
+        border-radius: 4px;
+        background: linear-gradient(180deg, #ffffff 0%, #d5d9e6 45%, #a3aabf 100%);
+    }
+
+    .wire-cap::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: calc(var(--cap) - 5px);
+        height: calc(var(--cap) - 5px);
+        translate: -50% -50%;
+        border-radius: 9999px;
+        background:
+            linear-gradient(45deg, transparent 42%, #6f768f 42% 58%, transparent 58%),
+            radial-gradient(circle, #eef0f6 0 55%, #7d849c 60%);
+    }
+
+    .wire-cap--top {
+        top: 0;
+    }
+
+    .wire-cap--bottom {
+        bottom: 0;
+        box-shadow: 0 3px 0 var(--color-ink);
+    }
+
+    /* The value, printed on the insulation */
+    .wire-label {
+        position: absolute;
+        z-index: 2;
+        inset: var(--cap) 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: -0.06em;
+        white-space: nowrap;
+    }
+
+    .wire-blue .wire-label,
+    .wire-red .wire-label {
+        text-shadow:
+            0 0 2px var(--color-ink),
+            0 0 1px var(--color-ink),
+            0 2px 0 var(--color-ink);
+    }
+
+    .wire-label small {
+        font-size: 0.55em;
+    }
+
+    .wire-cut .wire-label {
+        bottom: 54%;
+        top: calc(var(--cap) - 2px);
+        font-size: 0.8em;
+    }
+
+    /* Cut or revealed: the wire is done, so fade it (the number turns ink so it stays readable) */
+    .wire-done .wire-label {
+        color: rgb(43 37 80 / 0.8);
+        text-shadow: 0 0 3px #fff, 0 0 2px #fff;
+    }
+
+    .wire-done .wire-cable {
+        opacity: 0.55;
+    }
+
+    .wire-done .wire-cable {
+        filter: saturate(0.7);
+    }
+
+    .wire-done .wire-cap {
+        filter: grayscale(0.4);
+        opacity: 0.8;
+    }
+}
+/* === end wire tiles === */
