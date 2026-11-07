@@ -46,6 +46,8 @@ class HandleInertiaRequests extends Middleware
             'locale' => $locale,
             'locales' => config('bombbusters.locales'),
             'pushKey' => config('bombbusters.push.public_key'),
+            // Every equipment card in the game with its unlock number, for the equipment guide
+            'equipmentCatalog' => fn () => array_map(fn (array $card) => $card['unlock'], config('bombbusters.equipment')),
             // The whole UI dictionary for the active language; the frontend t() helper reads from it
             'translations' => fn () => $this->translations($locale),
         ];

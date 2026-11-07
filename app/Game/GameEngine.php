@@ -180,6 +180,20 @@ class GameEngine
      */
     public function dualCut(array $state, int $actor, int $target, int $index, int|string $kind): array
     {
+        return $this->cutNaming($state, $actor, $target, $index, [$kind]);
+    }
+
+    /**
+     * A Dual Cut naming one kind, or two with the X or Y Ray (either one counts, and the player
+     * must hold both). On a miss the entry logs the first kind as `value` and both as `values`.
+     *
+     * @param  array<string, mixed>  $state
+     * @param  list<int|string>  $kinds
+     * @param  array<string, mixed>  $extra  added to the log entry
+     * @return array<string, mixed>
+     */
+    private function cutNaming(array $state, int $actor, int $target, int $index, array $kinds, array $extra = []): array
+    {
         $this->assertTurn($state, $actor);
 
         if ($actor === $target) {
@@ -188,16 +202,29 @@ class GameEngine
 
         $this->assertPlayer($state, $target);
         $wire = $this->wire($state, $target, $index);
-        $kind = $this->normalizeKind($kind);
+        $kinds = array_values(array_unique(array_map(fn (int|string $kind) => $this->normalizeKind($kind), $kinds), SORT_REGULAR));
 
-        if ($kind === 'red') {
-            throw new GameRuleException('game.errors.value_not_held');
+        // The X or Y Ray names two different kinds, a plain Dual Cut one
+        if (count($kinds) !== (($extra['equipment'] ?? null) === 'xy_ray' ? 2 : 1)) {
+            throw new GameRuleException('game.errors.xy_two_values');
         }
 
-        $own = $this->firstUncut($state, $actor, $kind) ?? throw new GameRuleException('game.errors.value_not_held');
-        // Checked against what the player *named*, so a refusal never hints at the target wire
-        $this->assertSequenceAllows($state, $kind);
-        $entry = ['type' => 'dual_cut', 'actor' => $actor, 'target' => $target, 'index' => $index, 'value' => $kind];
+        foreach ($kinds as $kind) {
+            if ($kind === 'red' || $this->firstUncut($state, $actor, $kind) === null) {
+                throw new GameRuleException('game.errors.value_not_held');
+            }
+            // Checked against what the player *named*, so a refusal never hints at the target wire
+            $this->assertSequenceAllows($state, $kind);
+        }
+
+        $actual = $this->kindOf($wire);
+        $kind = in_array($actual, $kinds, true) ? $actual : $kinds[0];
+        $own = $this->firstUncut($state, $actor, $kind);
+        $entry = ['type' => 'dual_cut', 'actor' => $actor, 'target' => $target, 'index' => $index, 'value' => $kind, ...$extra];
+
+        if (count($kinds) > 1) {
+            $entry['values'] = $kinds;
+        }
 
         if ($wire['color'] === 'red') {
             $state['hands'][$target][$index]['cut'] = true;
@@ -400,15 +427,43 @@ class GameEngine
             throw new GameRuleException('game.errors.detector_used');
         }
 
+        $indices = array_values(array_unique(array_map('intval', $indices)));
+
+        if (count($indices) !== 2) {
+            throw new GameRuleException('game.errors.detector_two_wires');
+        }
+
+        // Plain assignment: spreading the user-id-keyed detectors map would renumber its keys
+        return $this->detect($state, $actor, $target, $indices, $kind, 'double_detector', function (array $state) use ($actor) {
+            $state['detectors'][$actor] = true;
+
+            return $state;
+        });
+    }
+
+    /**
+     * Shared by the Double, Triple and Super Detector: name a kind you hold and point at several
+     * wires on one teammate's stand. The first (leftmost) match is cut along with one of yours. On
+     * a miss the detonator ticks (the Stabilizer applies), nothing is cut, and the teammate reveals
+     * one of the pointed-at wires of their choice (revealForDetector).
+     *
+     * @param  array<string, mixed>  $state
+     * @param  list<int>  $indices
+     * @param  callable(array<string, mixed>): array<string, mixed>  $spend  marks the detector used, after validation
+     * @return array<string, mixed>
+     */
+    private function detect(array $state, int $actor, int $target, array $indices, int|string $kind, string $type, callable $spend): array
+    {
+        $this->assertTurn($state, $actor);
+
         if ($actor === $target) {
             throw new GameRuleException('game.errors.not_own_wire');
         }
 
         $this->assertPlayer($state, $target);
-        $indices = array_values(array_map('intval', $indices));
 
-        if (count($indices) !== 2 || $indices[0] === $indices[1]) {
-            throw new GameRuleException('game.errors.detector_two_wires');
+        if ($indices === []) {
+            throw new GameRuleException('game.errors.detector_no_wires');
         }
 
         sort($indices);
@@ -422,8 +477,8 @@ class GameEngine
         $own = $this->firstUncut($state, $actor, $kind) ?? throw new GameRuleException('game.errors.value_not_held');
         $this->assertSequenceAllows($state, $kind);
 
-        $state['detectors'][$actor] = true;
-        $entry = ['type' => 'double_detector', 'actor' => $actor, 'target' => $target, 'indices' => $indices, 'value' => $kind];
+        $state = $spend($state);
+        $entry = ['type' => $type, 'actor' => $actor, 'target' => $target, 'indices' => $indices, 'value' => $kind];
 
         foreach ($wires as $slot => $wire) {
             if ($this->kindOf($wire) === $kind) {
@@ -442,7 +497,7 @@ class GameEngine
             $state['detonator']['ticked'] = ($state['detonator']['ticked'] ?? 0) + 1;
         }
 
-        // The log says only that both missed; which wire gets revealed is the teammate's choice
+        // The log says only that all of them missed; which wire gets revealed is the teammate's choice
         $state = $this->log($state, [...$entry, 'success' => false, 'stabilized' => $stabilized]);
 
         if ($state['detonator']['mistakes'] >= $state['detonator']['limit']) {
@@ -483,6 +538,95 @@ class GameEngine
     }
 
     /**
+     * Walkie-Talkies, second half: the teammate picks one of their own wires, the two wires change
+     * stands, and both stands are re-sorted. Neither value is logged. Doesn't end the actor's turn.
+     *
+     * @param  array<string, mixed>  $state
+     * @return array<string, mixed>
+     */
+    public function answerWalkie(array $state, int $player, int $index): array
+    {
+        $this->assertPhase($state, 'playing');
+        $pending = $state['pending'];
+
+        if (($pending['type'] ?? null) !== 'walkie' || $pending['player'] !== $player) {
+            throw new GameRuleException('game.errors.nothing_to_reveal');
+        }
+
+        $this->assertSwappable($state, $player, $index);
+        $actor = $pending['actor'];
+        $given = $state['hands'][$actor][$pending['index']];
+        $state['hands'][$actor][$pending['index']] = $state['hands'][$player][$index];
+        $state['hands'][$player][$index] = $given;
+        $state = $this->resortHand($this->resortHand($state, $actor), $player);
+        $state['pending'] = null;
+
+        return $this->log($state, ['type' => 'walkie_swap', 'actor' => $actor, 'player' => $player]);
+    }
+
+    /**
+     * A wire that may change stands: uncut and without an info token (the token would give the
+     * new owner's wire away, and it belongs to the stand it was put on).
+     *
+     * @param  array<string, mixed>  $state
+     */
+    private function assertSwappable(array $state, int $userId, int $index): void
+    {
+        $wire = $this->wire($state, $userId, $index);
+
+        if ($wire['info'] !== null) {
+            throw new GameRuleException('game.errors.walkie_no_info');
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $state
+     */
+    private function hasSwappable(array $state, int $userId): bool
+    {
+        foreach ($state['hands'][$userId] as $wire) {
+            if (! $wire['cut'] && $wire['info'] === null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Sort a stand by rank again after a wire arrived. Labels follow their wires, and one whose two
+     * wires are no longer neighbours is dropped.
+     *
+     * @param  array<string, mixed>  $state
+     * @return array<string, mixed>
+     */
+    private function resortHand(array $state, int $userId): array
+    {
+        $hand = $state['hands'][$userId];
+        $order = array_keys($hand);
+        usort($order, fn (int $a, int $b) => [$hand[$a]['rank'], $a] <=> [$hand[$b]['rank'], $b]);
+        $moved = array_flip($order); // old index => new index
+        $state['hands'][$userId] = array_map(fn (int $old) => $hand[$old], $order);
+
+        $labels = [];
+        foreach ($state['labels'] as $label) {
+            if ($label['player'] !== $userId) {
+                $labels[] = $label;
+
+                continue;
+            }
+
+            $left = $moved[$label['index']];
+            if ($moved[$label['index'] + 1] === $left + 1) {
+                $labels[] = [...$label, 'index' => $left];
+            }
+        }
+        $state['labels'] = $labels;
+
+        return $state;
+    }
+
+    /**
      * Use an unlocked equipment card. Doesn't end the turn.
      *
      * @param  array<string, mixed>  $state
@@ -509,6 +653,37 @@ class GameEngine
             throw new GameRuleException('game.errors.equipment_locked_'.($card['rule'] ?? 'cut_pair'), ['value' => $card['unlock']]);
         }
 
+        $spend = function (array $state) use ($slot) {
+            $state['equipment'][$slot]['used'] = true;
+
+            return $state;
+        };
+
+        // Cards that *are* a cut action: they resolve (and end the turn) like one
+        switch ($id) {
+            case 'triple_detector':
+                $indices = array_values(array_unique(array_map('intval', (array) ($params['indices'] ?? []))));
+
+                if (count($indices) !== 3) {
+                    throw new GameRuleException('game.errors.detector_three_wires');
+                }
+
+                return $this->detect($state, $actor, (int) ($params['target'] ?? 0), $indices, $params['value'] ?? 0, 'triple_detector', $spend);
+
+            case 'super_detector':
+                $target = (int) ($params['target'] ?? 0);
+                $this->assertPlayer($state, $target);
+                $uncut = array_keys(array_filter($state['hands'][$target], fn (array $wire) => ! $wire['cut']));
+
+                return $this->detect($state, $actor, $target, $uncut, $params['value'] ?? 0, 'super_detector', $spend);
+
+            case 'xy_ray':
+                $state = $this->cutNaming($state, $actor, (int) ($params['target'] ?? 0), (int) ($params['index'] ?? -1), (array) ($params['values'] ?? []), ['equipment' => 'xy_ray']);
+                $state['equipment'][$slot]['used'] = true;
+
+                return $state;
+        }
+
         $entry = ['type' => 'equipment', 'id' => $id, 'actor' => $actor];
 
         switch ($id) {
@@ -526,14 +701,74 @@ class GameEngine
                 $entry += ['index' => $index, 'value' => $state['hands'][$actor][$index]['value']];
                 break;
 
-            case 'label':
+            case 'label': // older games: one label that tells the truth either way
+            case 'label_equal':
+            case 'label_different':
                 $index = (int) ($params['index'] ?? -1);
                 $left = $this->wire($state, $actor, $index);
                 $right = $this->wire($state, $actor, $index + 1);
                 $equal = $this->kindOf($left) === $this->kindOf($right);
+
+                // The player's own wires, so this refusal tells nobody anything new
+                if (($id === 'label_equal' && ! $equal) || ($id === 'label_different' && $equal)) {
+                    throw new GameRuleException("game.errors.{$id}_untrue");
+                }
+
                 $state['labels'][] = ['player' => $actor, 'index' => $index, 'equal' => $equal];
                 $entry += ['index' => $index, 'equal' => $equal];
                 break;
+
+            case 'walkie_talkies':
+                $index = (int) ($params['index'] ?? -1);
+                $target = (int) ($params['target'] ?? 0);
+                $this->assertSwappable($state, $actor, $index);
+
+                if ($target === $actor) {
+                    throw new GameRuleException('game.errors.not_own_wire');
+                }
+
+                $this->assertPlayer($state, $target);
+
+                if (! $this->hasSwappable($state, $target)) {
+                    throw new GameRuleException('game.errors.walkie_nothing_to_swap');
+                }
+
+                // The teammate now picks the wire they give back (answerWalkie)
+                $state['pending'] = ['type' => 'walkie', 'player' => $target, 'actor' => $actor, 'index' => $index];
+                $entry += ['target' => $target, 'index' => $index];
+                break;
+
+            case 'emergency_batteries':
+                $players = array_values(array_unique(array_map('intval', (array) ($params['players'] ?? []))));
+
+                if ($players === [] || count($players) > 2) {
+                    throw new GameRuleException('game.errors.batteries_pick');
+                }
+
+                foreach ($players as $player) {
+                    $this->assertPlayer($state, $player);
+
+                    if (! ($state['detectors'][$player] ?? false)) {
+                        throw new GameRuleException('game.errors.batteries_not_used');
+                    }
+                    $state['detectors'][$player] = false;
+                }
+                $entry += ['players' => $players];
+                break;
+
+            case 'coffee_mug':
+                $next = (int) ($params['player'] ?? 0);
+                $this->assertPlayer($state, $next);
+
+                if ($next === $actor || ! $this->hasUncut($state, $next)) {
+                    throw new GameRuleException('game.errors.coffee_pick');
+                }
+
+                $state['equipment'][$slot]['used'] = true;
+                $state['stabilized'] = null;
+                $state['turn'] = $next;
+
+                return $this->log($state, $entry + ['player' => $next]);
 
             case 'radar':
                 $value = (int) ($params['value'] ?? 0);
@@ -552,6 +787,30 @@ class GameEngine
         $state['equipment'][$slot]['used'] = true;
 
         return $this->log($state, $entry);
+    }
+
+    /**
+     * Takes back a Stabilizer that is still switched on: the card goes back to the team unused.
+     * Only the Stabilizer can be cancelled once used, because it reveals nothing and does nothing
+     * until a wrong cut (which ends the turn and with it the protection). The other cards act or
+     * reveal information the moment they are used, so the UI asks for confirmation instead.
+     *
+     * @param  array<string, mixed>  $state
+     * @return array<string, mixed>
+     */
+    public function cancelEquipment(array $state, int $actor, string $id): array
+    {
+        $this->assertTurn($state, $actor);
+
+        if ($id !== 'stabilizer' || $state['stabilized'] !== $actor) {
+            throw new GameRuleException('game.errors.equipment_not_cancellable');
+        }
+
+        $slot = array_search($id, array_column($state['equipment'], 'id'), true);
+        $state['equipment'][$slot]['used'] = false;
+        $state['stabilized'] = null;
+
+        return $this->log($state, ['type' => 'equipment_cancel', 'id' => $id, 'actor' => $actor]);
     }
 
     /**

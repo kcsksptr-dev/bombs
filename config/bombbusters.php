@@ -68,11 +68,20 @@ return [
     */
 
     'equipment' => [
-        'label' => ['unlock' => 2],      // mark two neighbouring wires of yours as equal / different
-        'post_it' => ['unlock' => 4],    // put an extra info token on one of your blue wires
-        'radar' => ['unlock' => 5],      // name a value: everyone shows whether they still hold it
-        'stabilizer' => ['unlock' => 7], // your next wrong cut this turn doesn't tick the detonator
-        'rewinder' => ['unlock' => 10],  // turn the detonator back by one
+        // The printed game's twelve cards, numbered as printed (the number is also what unlocks it).
+        // Effects live in GameEngine::useEquipment(); the UI input for each is EQUIPMENT_INPUT in game.js.
+        'label_different' => ['unlock' => 1],     // mark two neighbouring wires of yours that differ
+        'walkie_talkies' => ['unlock' => 2],      // swap one of your wires with one a teammate picks
+        'triple_detector' => ['unlock' => 3],     // Double Detector on three wires (a cut action)
+        'post_it' => ['unlock' => 4],             // put an extra info token on one of your blue wires
+        'super_detector' => ['unlock' => 5],      // Detector on a teammate's whole stand (a cut action)
+        'rewinder' => ['unlock' => 6],            // turn the detonator back by one
+        'emergency_batteries' => ['unlock' => 7], // recharge one or two used Double Detectors
+        'radar' => ['unlock' => 8],               // name a value: everyone shows whether they still hold it
+        'stabilizer' => ['unlock' => 9],          // your next wrong cut this turn doesn't tick the detonator
+        'xy_ray' => ['unlock' => 10],             // Dual Cut naming two values you hold (a cut action)
+        'coffee_mug' => ['unlock' => 11],         // skip your turn and choose who plays next
+        'label_equal' => ['unlock' => 12],        // mark two neighbouring wires of yours that are the same
     ],
 
     /*

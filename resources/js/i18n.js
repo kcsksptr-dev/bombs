@@ -11,7 +11,9 @@ export function useT() {
     return (key, replacements = {}) => {
         let text = page.props.translations?.[key] ?? key;
 
-        for (const [name, value] of Object.entries(replacements)) {
+        // Longest names first, like Laravel, so :player can't eat the start of :players
+        const entries = Object.entries(replacements).sort(([a], [b]) => b.length - a.length);
+        for (const [name, value] of entries) {
             text = text.replaceAll(`:${name}`, String(value));
         }
 

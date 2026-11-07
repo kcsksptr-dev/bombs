@@ -344,6 +344,133 @@ class GameEngineTest extends TestCase
         $this->assertNull($state['stabilized'], 'protection ends with the turn');
     }
 
+    public function test_a_switched_on_stabilizer_can_be_cancelled_until_it_is_spent(): void
+    {
+        $state = $this->unlocked($this->state([1 => [3, 7], 2 => [8, 9], 3 => [3, 9]], turn: 1, equipment: ['stabilizer', 'rewinder']));
+
+        $this->assertRule('game.errors.equipment_not_cancellable', fn () => $this->engine->cancelEquipment($state, 1, 'stabilizer'));
+
+        $state = $this->engine->useEquipment($state, 1, 'stabilizer');
+        $this->assertRule('game.errors.not_your_turn', fn () => $this->engine->cancelEquipment($state, 2, 'stabilizer'));
+
+        $state = $this->engine->cancelEquipment($state, 1, 'stabilizer');
+        $this->assertNull($state['stabilized']);
+        $this->assertFalse($state['equipment'][0]['used']);
+        $this->assertSame(['type' => 'equipment_cancel', 'id' => 'stabilizer', 'actor' => 1], end($state['log']));
+        $this->assertSame(1, $state['turn'], 'cancelling does not end the turn');
+
+        // Usable again, and spent once a wrong cut has used it up
+        $state = $this->engine->useEquipment($state, 1, 'stabilizer');
+        $state = $this->engine->dualCut($state, 1, 2, 0, 7);
+        $this->assertRule('game.errors.not_your_turn', fn () => $this->engine->cancelEquipment($state, 1, 'stabilizer'));
+        $this->assertRule('game.errors.equipment_not_cancellable', fn () => $this->engine->cancelEquipment($state, 2, 'stabilizer'));
+        $this->assertRule('game.errors.equipment_not_cancellable', fn () => $this->engine->cancelEquipment($state, 2, 'rewinder'));
+    }
+
+    public function test_using_the_double_detector_spends_only_the_users_own(): void
+    {
+        $state = $this->state([10 => [3, 7], 20 => [3, 9], 30 => [7]], turn: 10);
+        $state['detectors'] = [10 => false, 20 => false, 30 => false];
+
+        $state = $this->engine->doubleDetector($state, 10, 20, [0, 1], 3);
+
+        $this->assertSame([10 => true, 20 => false, 30 => false], $state['detectors']);
+    }
+
+    public function test_the_two_labels_only_go_where_they_tell_the_truth(): void
+    {
+        $state = $this->unlocked($this->state([1 => [3, 3, 6], 2 => [6, 9]], turn: 1, equipment: ['label_equal', 'label_different']));
+
+        $this->assertRule('game.errors.label_equal_untrue', fn () => $this->engine->useEquipment($state, 1, 'label_equal', ['index' => 1]));
+        $this->assertRule('game.errors.label_different_untrue', fn () => $this->engine->useEquipment($state, 1, 'label_different', ['index' => 0]));
+
+        $state = $this->engine->useEquipment($state, 1, 'label_equal', ['index' => 0]);
+        $state = $this->engine->useEquipment($state, 1, 'label_different', ['index' => 1]);
+        $this->assertSame([['player' => 1, 'index' => 0, 'equal' => true], ['player' => 1, 'index' => 1, 'equal' => false]], $state['labels']);
+    }
+
+    public function test_walkie_talkies_swap_one_wire_each_and_resort_both_stands(): void
+    {
+        $state = $this->unlocked($this->state([1 => [2, 5, 9], 2 => [1, 7, 11]], turn: 1, equipment: ['walkie_talkies']));
+        $state['hands'][2][0]['info'] = 1;
+        $state['labels'] = [['player' => 1, 'index' => 1, 'equal' => false], ['player' => 2, 'index' => 1, 'equal' => false]];
+
+        $state = $this->engine->useEquipment($state, 1, 'walkie_talkies', ['index' => 0, 'target' => 2]);
+        $this->assertSame('walkie', $state['pending']['type']);
+        $this->assertRule('game.errors.walkie_no_info', fn () => $this->engine->answerWalkie($state, 2, 0));
+        $this->assertRule('game.errors.nothing_to_reveal', fn () => $this->engine->answerWalkie($state, 1, 1));
+
+        // Bob gives his 11 for Anna's 2
+        $state = $this->engine->answerWalkie($state, 2, 2);
+        $this->assertSame([5, 9, 11], array_column(array_slice($state['hands'][1], 0, 3), 'value'));
+        $this->assertSame([1, 2, 7], array_column(array_slice($state['hands'][2], 0, 3), 'value'));
+        $this->assertNull($state['pending']);
+        $this->assertSame(1, $state['turn'], 'the swap does not end the turn');
+        $this->assertSame(['type' => 'walkie_swap', 'actor' => 1, 'player' => 2], end($state['log']), 'no values in the log');
+        // Anna's 5|9 label moved with its wires; Bob's 7|11 pair was split up, so it's gone
+        $this->assertSame([['player' => 1, 'index' => 0, 'equal' => false]], array_values(array_filter($state['labels'], fn ($label) => $label['player'] === 1)));
+        $this->assertSame([], array_values(array_filter($state['labels'], fn ($label) => $label['player'] === 2)));
+    }
+
+    public function test_triple_and_super_detector_are_cut_actions_with_a_reveal_on_a_miss(): void
+    {
+        $state = $this->unlocked($this->state([1 => [3, 7], 2 => [1, 2, 4, 7], 3 => [3, 9]], turn: 1, equipment: ['triple_detector', 'super_detector']));
+
+        $hit = $this->engine->useEquipment($state, 1, 'triple_detector', ['target' => 2, 'indices' => [3, 0, 1], 'value' => 7]);
+        $this->assertTrue($hit['hands'][2][3]['cut']);
+        $this->assertTrue($hit['hands'][1][1]['cut']);
+        $this->assertSame(2, $hit['turn']);
+        $this->assertFalse($hit['detectors'][1], 'the personal Double Detector is untouched');
+
+        $miss = $this->engine->useEquipment($state, 1, 'triple_detector', ['target' => 2, 'indices' => [0, 1, 2], 'value' => 3]);
+        $this->assertSame(1, $miss['detonator']['mistakes']);
+        $this->assertSame([0, 1, 2], $miss['pending']['indices']);
+        $this->assertRule('game.errors.detector_three_wires', fn () => $this->engine->useEquipment($state, 1, 'triple_detector', ['target' => 2, 'indices' => [0, 1], 'value' => 3]));
+
+        $super = $this->engine->useEquipment($state, 1, 'super_detector', ['target' => 3, 'value' => 3]);
+        $this->assertTrue($super['hands'][3][0]['cut']);
+        $this->assertSame('super_detector', end($super['log'])['type']);
+
+        $superMiss = $this->engine->useEquipment($state, 1, 'super_detector', ['target' => 2, 'value' => 3]);
+        $this->assertSame([0, 1, 2, 3], $superMiss['pending']['indices']);
+        $superMiss = $this->engine->revealForDetector($superMiss, 2, 2);
+        $this->assertSame(4, $superMiss['hands'][2][2]['info']);
+    }
+
+    public function test_xy_ray_names_two_held_values(): void
+    {
+        $state = $this->unlocked($this->state([1 => [3, 7], 2 => [7, 9], 3 => [3]], turn: 1, equipment: ['xy_ray']));
+
+        $this->assertRule('game.errors.value_not_held', fn () => $this->engine->useEquipment($state, 1, 'xy_ray', ['target' => 2, 'index' => 0, 'values' => [3, 9]]));
+        $this->assertRule('game.errors.xy_two_values', fn () => $this->engine->useEquipment($state, 1, 'xy_ray', ['target' => 2, 'index' => 0, 'values' => [3, 3]]));
+
+        $hit = $this->engine->useEquipment($state, 1, 'xy_ray', ['target' => 2, 'index' => 0, 'values' => [3, 7]]);
+        $this->assertTrue($hit['hands'][2][0]['cut']);
+        $this->assertTrue($hit['hands'][1][1]['cut'], 'the matching 7 of mine is cut');
+        $this->assertSame([3, 7], end($hit['log'])['values']);
+        $this->assertTrue($hit['equipment'][0]['used']);
+
+        $miss = $this->engine->useEquipment($state, 1, 'xy_ray', ['target' => 2, 'index' => 1, 'values' => [3, 7]]);
+        $this->assertSame(9, $miss['hands'][2][1]['info']);
+        $this->assertSame(1, $miss['detonator']['mistakes']);
+    }
+
+    public function test_emergency_batteries_and_coffee_mug(): void
+    {
+        $state = $this->unlocked($this->state([1 => [3, 7], 2 => [7, 9], 3 => [3, 9]], turn: 1, equipment: ['emergency_batteries', 'coffee_mug']));
+        $state['detectors'][2] = true;
+
+        $this->assertRule('game.errors.batteries_not_used', fn () => $this->engine->useEquipment($state, 1, 'emergency_batteries', ['players' => [1]]));
+        $state = $this->engine->useEquipment($state, 1, 'emergency_batteries', ['players' => [2]]);
+        $this->assertFalse($state['detectors'][2]);
+        $this->assertSame(1, $state['turn']);
+
+        $this->assertRule('game.errors.coffee_pick', fn () => $this->engine->useEquipment($state, 1, 'coffee_mug', ['player' => 1]));
+        $state = $this->engine->useEquipment($state, 1, 'coffee_mug', ['player' => 3]);
+        $this->assertSame(3, $state['turn']);
+        $this->assertSame(['type' => 'equipment', 'id' => 'coffee_mug', 'actor' => 1, 'player' => 3], end($state['log']));
+    }
+
     public function test_post_it_label_and_radar(): void
     {
         $state = $this->unlocked($this->state([1 => [3, 3, 6, 'y8'], 2 => [6, 9], 3 => [3, 9]], turn: 1, equipment: ['post_it', 'label', 'radar']));

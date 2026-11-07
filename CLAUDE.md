@@ -123,9 +123,23 @@ use), `bombbusters.<ip>.nip.io` and `*.trycloudflare.com` (the public tunnel). O
 - **Sequences:** the engine checks the kind a player *names* (never the target), so a refusal leaks nothing.
   `allowedHeldValues()` and `sequenceProgress()` drive the UI. When the order blocks every move, the player must
   **pass** (`mustPass()`); without that, a player holding only locked numbers would freeze the game.
-- **Equipment** catalog: `config/bombbusters.php` → `equipment` (effects in `GameEngine::useEquipment()`): label,
-  post_it, radar, stabilizer, rewinder. It's usable once, by the current player, and doesn't end the turn.
+- **Equipment** catalog: `config/bombbusters.php` → `equipment` (effects in `GameEngine::useEquipment()`): the printed
+  game's twelve cards, numbered as printed (label_different 1, walkie_talkies 2, triple_detector 3, post_it 4,
+  super_detector 5, rewinder 6, emergency_batteries 7, radar 8, stabilizer 9, xy_ray 10, coffee_mug 11,
+  label_equal 12). Each is usable once, by the current player. Most don't end the turn, but the Triple/Super Detector
+  and the X or Y Ray *are* the cut action (shared `detect()` / `cutNaming()`), and the Coffee Mug hands the turn on.
+  Walkie-Talkies set `pending` = `walkie` until the teammate answers (`answerWalkie()`, `POST …/game/walkie`); both
+  stands are then re-sorted and labels whose wires split up are dropped. The old single `label` card still works for
+  games dealt before the change. The UI input per card is `EQUIPMENT_INPUT` in `resources/js/game.js`.
+  ⚠️ Never rebuild the user-id-keyed maps (`detectors`, `hands`, `info_placed`) with `[...$map]`: spreading renumbers
+  integer keys (this once wiped every player's Double Detector).
   `detonator.ticked` counts every mistake ever, for after_mistake (the Rewinder doesn't undo it).
+  Cards are cancellable before they act: instant ones ask "Use it now?", Post-it/Label pick a wire and then confirm.
+  A switched-on Stabilizer can be switched off again (`cancelEquipment()`, `POST …/game/equipment/stabilizer/cancel`)
+  until a wrong cut spends it; the others reveal or change something at once, so only the host's undo takes them back.
+  `components/game/EquipmentGuide.vue` lists the whole catalog (shared prop `equipmentCatalog`) in the mission picker
+  and on the game's equipment tab. A new card needs its icon and input in `resources/js/game.js` and its texts in both
+  dictionaries.
 - **Campaign progress:** a win records `mission_completions` for every player (`GameService::recordCompletion`).
   After a win, the host's "Next mission" (`POST …/game/next-mission`) returns to the lobby with mission + 1. It never
   advances after a loss.
@@ -169,10 +183,19 @@ use), `bombbusters.<ip>.nip.io` and `*.trycloudflare.com` (the public tunnel). O
 - **echo-vue shares one subscription per channel across components** (reference-counted). When going from Lobby to
   Game, the channel is reused and Echo's `here()` never fires again. `RoomPresence.vue` therefore reads members from
   the Pusher subscription (`subscription.members`, `pusher:member_added/removed`) and unbinds on unmount.
+- **Per-phone display settings** (in `localStorage`, all in `Game.vue`): wire zoom (CSS `zoom`, so tap targets
+  grow too) and auto-hide (`WireTile`'s `masked` prop draws own uncut wires as hidden; any press on the stand shows
+  them). Everything inside `.wire-tile` has `pointer-events: none`, because a tile's insides change while pressed and
+  a press and release on different inner elements isn't a click. Keep it that way.
 - `data-testid` attributes (and the hidden `data-busy` span on the game page) are hooks for browser tests. Keep them
   when restyling.
 - The design system lives in `resources/css/app.css` (`@theme` colours, `.card`, `.btn`, `.chip`, `.input`,
-  animations). Use those classes rather than one-off styling. The Fredoka font is downloaded by the Vite fonts
+  animations). Use those classes rather than one-off styling.
+- **Dark mode:** `<html data-theme>` is set before first paint by the inline script in `app.blade.php` (saved choice in
+  `localStorage`, else the phone's setting) and toggled by `components/ThemeToggle.vue`. `ink` is *text* and turns light;
+  outlines and drop shadows use `line` (`border-line`, `var(--color-line)`), which stays dark. Never use `border-ink` or
+  `var(--color-ink)` for outlines. Rules that must beat a `bg-*` utility (like the dark disabled `.btn`) go outside
+  any `@layer`, because layered rules lose to utilities whatever their specificity. Candy backgrounds (`bg-sun`, `bg-sky`, …) keep dark text via the overrides in `app.css`. The Fredoka font is downloaded by the Vite fonts
   plugin at build time and bundled, so phones don't need internet.
 
 ## Translations (English + Hungarian, both required)

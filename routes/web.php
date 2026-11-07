@@ -33,6 +33,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/game/double-detector', [GameController::class, 'doubleDetector'])->name('game.double-detector');
         Route::post('/game/detector-reveal', [GameController::class, 'revealForDetector'])->name('game.detector-reveal');
         Route::post('/game/reveal-red', [GameController::class, 'revealRed'])->name('game.reveal-red');
+        Route::post('/game/walkie', [GameController::class, 'answerWalkie'])->name('game.walkie');
+        Route::post('/game/equipment/{equipment}/cancel', [GameController::class, 'cancelEquipment'])->name('game.equipment.cancel');
         Route::post('/game/equipment/{equipment}', [GameController::class, 'useEquipment'])->name('game.equipment');
         Route::post('/game/nudge/{user}', [GameController::class, 'nudge'])->name('game.nudge');
         Route::post('/game/undo', [GameController::class, 'undo'])->name('game.undo');

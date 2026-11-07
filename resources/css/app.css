@@ -12,8 +12,9 @@
 @theme {
     --font-sans: 'Fredoka', ui-rounded, 'Nunito', system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
 
-    --color-ink: #2b2550;
+    --color-ink: #2b2550; /* text */
     --color-ink-soft: #6b6491;
+    --color-line: #2b2550; /* outlines and drop shadows: stays dark in dark mode */
     --color-cream: #fff8ec;
     --color-cloud: #eef4ff;
     --color-sky: #4cc3ff;
@@ -93,6 +94,51 @@
     }
 }
 
+/*
+ * Dark mode: <html data-theme="dark">, set before first paint by the script in app.blade.php
+ * (saved choice, else the phone's setting) and toggled by ThemeToggle.vue. Surfaces go dark and
+ * `ink` text goes light; outlines (`line`) stay dark, and the candy colours stay bright with dark
+ * text on them. Wire tiles keep their own colours.
+ */
+@layer base {
+    :root[data-theme='dark'] {
+        color-scheme: dark;
+        --color-ink: #f1edff;
+        --color-ink-soft: #b3abd8;
+        --color-line: #0b0919;
+        --color-white: #2c2750;
+        --color-cream: #221e3d;
+        --color-cloud: #3a3462;
+        --color-sky-soft: #1b3b56;
+        --color-sun-soft: #463a14;
+        --color-berry-soft: #4a1f35;
+        --color-mint-soft: #163d2f;
+        --color-lilac: #3a2f68;
+    }
+
+    /* Bright candy backgrounds keep dark text (and reset it for anything nested inside) */
+    :root[data-theme='dark'] :is(.bg-sun, .bg-sky, .bg-mint, .bg-tangerine, .bg-berry, .bg-grape) {
+        --color-ink: #2b2550;
+        --color-ink-soft: #4f4878;
+        --color-white: #ffffff;
+        color: var(--color-ink);
+    }
+
+    /* ...and a dark surface nested in a bright one goes back to light text */
+    :root[data-theme='dark'] :is(.bg-white, .bg-cloud, .bg-cream, .bg-sky-soft, .bg-sun-soft, .bg-berry-soft, .bg-mint-soft, .bg-lilac) {
+        --color-ink: #f1edff;
+        --color-ink-soft: #b3abd8;
+        --color-white: #2c2750;
+    }
+
+    :root[data-theme='dark'] body {
+        background-color: #15122b;
+        background-image:
+            radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.07) 1.5px, transparent 0),
+            linear-gradient(180deg, #1c1838 0%, #15122b 55%, #1d1530 100%);
+    }
+}
+
 @layer base {
     body {
         background-color: #c9eeff;
@@ -117,23 +163,23 @@
 
 @layer components {
     .card {
-        @apply rounded-3xl border-[3px] border-ink bg-white p-4 shadow-[0_6px_0_var(--color-ink)];
+        @apply rounded-3xl border-[3px] border-line bg-white p-4 shadow-[0_6px_0_var(--color-line)];
     }
 
     .btn {
-        @apply inline-flex items-center justify-center gap-2 rounded-2xl border-[3px] border-ink px-4 py-3 text-lg font-semibold text-ink shadow-[0_5px_0_var(--color-ink)] transition-[transform,box-shadow] duration-75 select-none active:translate-y-1 active:shadow-[0_1px_0_var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:translate-y-0 disabled:active:shadow-[0_5px_0_var(--color-ink)];
+        @apply inline-flex items-center justify-center gap-2 rounded-2xl border-[3px] border-line px-4 py-3 text-lg font-semibold text-ink shadow-[0_5px_0_var(--color-line)] transition-[transform,box-shadow] duration-75 select-none active:translate-y-1 active:shadow-[0_1px_0_var(--color-line)] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:translate-y-0 disabled:active:shadow-[0_5px_0_var(--color-line)];
     }
 
     .btn-sm {
-        @apply rounded-xl border-2 px-2.5 py-1 text-sm shadow-[0_3px_0_var(--color-ink)] active:shadow-[0_0_0_var(--color-ink)];
+        @apply rounded-xl border-2 px-2.5 py-1 text-sm shadow-[0_3px_0_var(--color-line)] active:shadow-[0_0_0_var(--color-line)];
     }
 
     .input {
-        @apply w-full rounded-2xl border-[3px] border-ink bg-cloud px-4 py-3 text-lg text-ink outline-none placeholder:text-ink-soft/60 focus:bg-white focus:ring-4 focus:ring-sun;
+        @apply w-full rounded-2xl border-[3px] border-line bg-cloud px-4 py-3 text-lg text-ink outline-none placeholder:text-ink-soft/60 focus:bg-white focus:ring-4 focus:ring-sun;
     }
 
     .chip {
-        @apply inline-flex items-center gap-1 rounded-full border-2 border-ink px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-ink;
+        @apply inline-flex items-center gap-1 rounded-full border-2 border-line px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-ink;
     }
 
     .label {
@@ -154,7 +200,7 @@
     .wire-tile {
         --cap: 9px;
         --inset: 5px;
-        --wire-base: var(--color-lilac);
+        --wire-base: #e9e1ff;
         --wire-dark: #b9a6f2;
         --wire-light: #ffffff;
         --wire-text: rgb(43 37 80 / 0.7);
@@ -163,6 +209,12 @@
         color: var(--wire-text);
         font-weight: 700;
         line-height: 1;
+    }
+
+    /* Taps always land on the <button> itself: its insides change while pressed (auto-hide peek),
+       and a press and release on different inner elements wouldn't count as a click */
+    .wire-tile > * {
+        pointer-events: none;
     }
 
     .wire-tile--lg {
@@ -181,7 +233,7 @@
         --wire-base: var(--color-sun);
         --wire-dark: #e09a00;
         --wire-light: #fff4c7;
-        --wire-text: var(--color-ink);
+        --wire-text: var(--color-line);
     }
 
     .wire-red {
@@ -198,7 +250,7 @@
         bottom: calc(var(--cap) - 3px);
         left: var(--inset);
         right: var(--inset);
-        border: 2px solid var(--color-ink);
+        border: 2px solid var(--color-line);
         border-block-width: 0;
         background: linear-gradient(90deg, var(--wire-dark) 0%, var(--wire-base) 24%, var(--wire-light) 38%, var(--wire-base) 52%, var(--wire-base) 70%, var(--wire-dark) 100%);
     }
@@ -206,7 +258,7 @@
     .wire-hidden .wire-cable {
         background:
             linear-gradient(90deg, rgb(43 37 80 / 0.18) 0%, transparent 25%, rgb(255 255 255 / 0.7) 38%, transparent 52%, transparent 70%, rgb(43 37 80 / 0.22) 100%),
-            repeating-linear-gradient(-35deg, var(--color-lilac) 0 4px, #cbb8ff 4px 7px);
+            repeating-linear-gradient(-35deg, #e9e1ff 0 4px, #cbb8ff 4px 7px);
     }
 
     /* Cut: the cable is snipped in two, each end showing copper strands */
@@ -249,7 +301,7 @@
         right: 1px;
         height: var(--cap);
         z-index: 1;
-        border: 2px solid var(--color-ink);
+        border: 2px solid var(--color-line);
         border-radius: 4px;
         background: linear-gradient(180deg, #ffffff 0%, #d5d9e6 45%, #a3aabf 100%);
     }
@@ -274,7 +326,7 @@
 
     .wire-cap--bottom {
         bottom: 0;
-        box-shadow: 0 3px 0 var(--color-ink);
+        box-shadow: 0 3px 0 var(--color-line);
     }
 
     /* The value, printed on the insulation */
@@ -292,9 +344,9 @@
     .wire-blue .wire-label,
     .wire-red .wire-label {
         text-shadow:
-            0 0 2px var(--color-ink),
-            0 0 1px var(--color-ink),
-            0 2px 0 var(--color-ink);
+            0 0 2px var(--color-line),
+            0 0 1px var(--color-line),
+            0 2px 0 var(--color-line);
     }
 
     .wire-label small {
@@ -327,3 +379,13 @@
     }
 }
 /* === end wire tiles === */
+
+/* Outside any layer on purpose: it has to beat the bg-* utilities */
+/* Disabled buttons: fading a bright button over a dark page leaves dark text on a muddy
+   background, so in dark mode they turn into a muted grey button with light text instead */
+:root[data-theme='dark'] .btn:disabled {
+    --color-ink: #a59dcb;
+    background-color: #34305a;
+    color: #a59dcb;
+    opacity: 0.8;
+}
