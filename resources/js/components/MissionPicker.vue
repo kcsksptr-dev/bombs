@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { kindLabel } from '../game';
+import EquipmentGuide from './game/EquipmentGuide.vue';
 import { useT } from '../i18n';
 
 /**
@@ -71,10 +72,10 @@ const rules = computed(() => {
                 class="relative flex aspect-square items-center justify-center rounded-full border-[3px] text-base font-bold transition-transform"
                 :class="[
                     mission.number === modelValue
-                        ? 'scale-110 border-ink bg-sun shadow-[0_3px_0_var(--color-ink)]'
+                        ? 'scale-110 border-line bg-sun shadow-[0_3px_0_var(--color-line)]'
                         : options.completed.includes(mission.number)
-                          ? 'border-ink bg-mint'
-                          : 'border-ink/40 bg-white',
+                          ? 'border-line bg-mint'
+                          : 'border-line/40 bg-white',
                     readonly && mission.number !== modelValue ? 'opacity-50' : '',
                 ]"
                 :aria-checked="mission.number === modelValue"
@@ -89,7 +90,7 @@ const rules = computed(() => {
             </button>
         </div>
 
-        <article v-if="selected" class="animate-pop rounded-2xl border-[3px] border-ink bg-cream p-3" :key="selected.number" data-testid="mission-card">
+        <article v-if="selected" class="animate-pop rounded-2xl border-[3px] border-line bg-cream p-3" :key="selected.number" data-testid="mission-card">
             <p class="flex flex-wrap items-center gap-2">
                 <span class="chip bg-sun">{{ t('mission.title', { number: selected.number }) }}</span>
                 <span class="text-lg font-bold">{{ t(`mission.${selected.number}.name`) }}</span>
@@ -101,5 +102,7 @@ const rules = computed(() => {
                 <li v-for="rule in rules" :key="rule.text" class="chip whitespace-normal" :class="rule.tone">{{ rule.icon }} {{ rule.text }}</li>
             </ul>
         </article>
+
+        <EquipmentGuide :in-play="selected?.equipment.cards ?? null" :random="selected?.equipment.cards ? 0 : (selected?.equipment.count ?? 0)" />
     </div>
 </template>

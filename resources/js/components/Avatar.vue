@@ -13,7 +13,7 @@ const avatar = computed(() => seatAvatar(props.seat));
 
 <template>
     <span
-        class="relative inline-flex shrink-0 items-center justify-center rounded-full border-[3px] border-ink"
+        class="relative inline-flex shrink-0 items-center justify-center rounded-full border-[3px] border-line"
         :class="[avatar.bg, size === 'lg' ? 'size-14 text-3xl' : size === 'sm' ? 'size-8 text-base' : 'size-11 text-2xl']"
         aria-hidden="true"
     >

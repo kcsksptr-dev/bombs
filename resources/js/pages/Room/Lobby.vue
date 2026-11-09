@@ -89,7 +89,7 @@ async function copyLink() {
         <!-- Not (or no longer) part of this room -->
         <section v-if="!me.isMember" class="card animate-pop flex flex-col items-center gap-4 text-center">
             <p class="label">{{ t('lobby.room_code') }}</p>
-            <p class="rounded-2xl border-[3px] border-ink bg-sun px-5 py-2 text-4xl font-bold tracking-[0.25em] shadow-[0_5px_0_var(--color-ink)]">
+            <p class="rounded-2xl border-[3px] border-line bg-sun px-5 py-2 text-4xl font-bold tracking-[0.25em] shadow-[0_5px_0_var(--color-line)]">
                 {{ room.code }}
             </p>
             <p class="font-medium">👥 {{ t('lobby.players_count', { count: room.players.length, capacity: room.capacity }) }}</p>
@@ -116,7 +116,7 @@ async function copyLink() {
         <RoomPresence v-else v-slot="{ status }" :code="room.code" @online="online = $event" @changed="resync">
             <!-- Room code + QR for the others at the table -->
             <section class="card mb-4 flex items-center gap-4">
-                <div class="size-28 shrink-0 overflow-hidden rounded-2xl border-[3px] border-ink bg-white p-1" v-html="qrSvg" />
+                <div class="size-28 shrink-0 overflow-hidden rounded-2xl border-[3px] border-line bg-white p-1" v-html="qrSvg" />
                 <div class="min-w-0 flex-1">
                     <p class="label">{{ t('lobby.room_code') }}</p>
                     <p class="text-4xl font-bold tracking-[0.2em] text-ink" data-testid="room-code">{{ room.code }}</p>
@@ -146,8 +146,8 @@ async function copyLink() {
                     :class="
                         seat.player
                             ? seat.player.id === me.id
-                                ? 'border-ink bg-sun-soft shadow-[0_5px_0_var(--color-ink)]'
-                                : 'border-ink bg-white shadow-[0_5px_0_var(--color-ink)]'
+                                ? 'border-line bg-sun-soft shadow-[0_5px_0_var(--color-line)]'
+                                : 'border-line bg-white shadow-[0_5px_0_var(--color-line)]'
                             : 'border-dashed border-ink-soft/50 bg-white/50'
                     "
                     :data-testid="seat.player ? 'seat-taken' : 'seat-empty'"
@@ -174,7 +174,7 @@ async function copyLink() {
                             </span>
                             <button
                                 type="button"
-                                class="absolute inset-0 rounded-3xl active:bg-ink/10"
+                                class="absolute inset-0 rounded-3xl active:bg-line/10"
                                 :aria-label="seat.player.ready ? t('lobby.unready') : t('lobby.im_ready')"
                                 :aria-pressed="seat.player.ready"
                                 data-testid="ready"

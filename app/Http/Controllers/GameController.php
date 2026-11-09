@@ -113,10 +113,34 @@ class GameController extends Controller
     {
         $validated = $request->validate([
             'index' => ['sometimes', 'integer', 'min:0'],
-            'value' => ['sometimes', 'integer', 'min:1'],
+            // A number, or 'yellow' for the detectors and the X or Y Ray
+            'value' => ['sometimes', 'regex:/^([1-9]|1[0-2]|yellow)$/'],
+            'target' => ['sometimes', 'integer'],
+            'player' => ['sometimes', 'integer'],
+            'indices' => ['sometimes', 'array', 'max:12'],
+            'indices.*' => ['integer', 'min:0'],
+            'values' => ['sometimes', 'array', 'size:2'],
+            'values.*' => ['regex:/^([1-9]|1[0-2]|yellow)$/'],
+            'players' => ['sometimes', 'array', 'max:2'],
+            'players.*' => ['integer'],
         ]);
 
         $this->games->useEquipment($room, $request->user(), $equipment, $validated);
+
+        return back();
+    }
+
+    public function answerWalkie(Request $request, Room $room): RedirectResponse
+    {
+        $validated = $request->validate(['index' => ['required', 'integer', 'min:0']]);
+        $this->games->answerWalkie($room, $request->user(), $validated['index']);
+
+        return back();
+    }
+
+    public function cancelEquipment(Request $request, Room $room, string $equipment): RedirectResponse
+    {
+        $this->games->cancelEquipment($room, $request->user(), $equipment);
 
         return back();
     }

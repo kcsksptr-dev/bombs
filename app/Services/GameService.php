@@ -92,6 +92,16 @@ class GameService
         $this->apply($room, fn (array $state) => $this->engine->useEquipment($state, $user->id, $id, $params));
     }
 
+    public function answerWalkie(Room $room, User $user, int $index): void
+    {
+        $this->apply($room, fn (array $state) => $this->engine->answerWalkie($state, $user->id, $index));
+    }
+
+    public function cancelEquipment(Room $room, User $user, string $id): void
+    {
+        $this->apply($room, fn (array $state) => $this->engine->cancelEquipment($state, $user->id, $id));
+    }
+
     /**
      * Host takes back the latest move, including one that won or lost the mission. One step per
      * call, so a Double Detector miss and the teammate's reveal are two steps.

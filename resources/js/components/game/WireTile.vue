@@ -10,7 +10,12 @@ const props = defineProps({
     large: Boolean,
     selectable: Boolean,
     selected: Boolean,
+    // Own wire hidden from onlookers (auto-hide): drawn like a teammate's hidden wire. Cut and
+    // revealed wires are public anyway, and info tokens stay visible.
+    masked: Boolean,
 });
+
+const hide = computed(() => props.masked && !props.wire.cut && !props.wire.revealed);
 
 defineEmits(['select']);
 
@@ -18,7 +23,7 @@ defineEmits(['select']);
 const paint = computed(() => {
     if (props.wire.revealed) return 'wire-red';
 
-    return props.wire.color ? `wire-${props.wire.color}` : 'wire-hidden';
+    return props.wire.color && !hide.value ? `wire-${props.wire.color}` : 'wire-hidden';
 });
 const done = computed(() => props.wire.cut || props.wire.revealed);
 
@@ -43,11 +48,12 @@ const fraction = computed(() => (props.wire.color && props.wire.color !== 'blue'
         :disabled="!selectable"
         data-testid="wire"
         :data-cut="wire.cut"
-        :data-color="wire.color ?? ''"
+        :data-color="hide ? '' : (wire.color ?? '')"
+        :data-masked="hide"
         :data-info="wire.info ?? ''"
         @click="$emit('select')"
     >
-        <span v-if="wire.value !== null" class="wire-label" :class="whole >= 10 && fraction ? 'text-[0.8em]' : ''">{{ whole }}<small>{{ fraction }}</small></span>
+        <span v-if="wire.value !== null && !hide" class="wire-label" :class="whole >= 10 && fraction ? 'text-[0.8em]' : ''">{{ whole }}<small>{{ fraction }}</small></span>
         <span v-else class="wire-label" aria-hidden="true">?</span>
         <template v-if="wire.cut">
             <span class="wire-cable wire-cable--top" aria-hidden="true" />
@@ -60,7 +66,7 @@ const fraction = computed(() => (props.wire.color && props.wire.color !== 'blue'
         <span v-if="wire.revealed" class="absolute -top-2 -right-2 z-3 text-base" aria-hidden="true">🚫</span>
         <span
             v-if="wire.info !== null && !wire.cut"
-            class="absolute -top-2.5 -right-2.5 z-3 flex size-6 items-center justify-center rounded-full border-2 border-ink text-xs text-ink [text-shadow:none]"
+            class="absolute -top-2.5 -right-2.5 z-3 flex size-6 items-center justify-center rounded-full border-2 border-line text-xs text-ink [text-shadow:none]"
             :class="wire.info === 'yellow' ? 'bg-sun' : wire.info === 'red' ? 'bg-berry' : 'bg-white'"
             data-testid="info-token"
         >

@@ -81,7 +81,9 @@ class GameView
                 'soloCutValues' => $myTurn ? $this->engine->soloCutValues($state, $viewer) : [],
                 'canRevealRed' => $myTurn && $this->engine->canRevealRed($state, $viewer),
                 'canUseDetector' => $myTurn && ! ($state['detectors'][$viewer] ?? true) && $this->engine->allowedHeldValues($state, $viewer) !== [],
-                'mustRevealForDetector' => ($pending['player'] ?? null) === $viewer,
+                'mustRevealForDetector' => ($pending['type'] ?? null) === 'detector_reveal' && $pending['player'] === $viewer,
+                // Walkie-Talkies: a teammate asked me to pick a wire to swap with theirs
+                'mustAnswerWalkie' => ($pending['type'] ?? null) === 'walkie' && $pending['player'] === $viewer,
             ],
             // Everything in the log is public information by construction
             'log' => $state['log'],

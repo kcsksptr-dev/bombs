@@ -17,7 +17,7 @@ const t = useT();
             <span
                 v-for="step in detonator.limit"
                 :key="step"
-                class="flex h-5 flex-1 items-center justify-center rounded-full border-2 border-ink text-xs"
+                class="flex h-5 flex-1 items-center justify-center rounded-full border-2 border-line text-xs"
                 :class="step <= detonator.mistakes ? 'bg-berry' : 'bg-white'"
             >
                 <span v-if="step === detonator.mistakes" aria-hidden="true">🔥</span>

@@ -22,7 +22,7 @@ function kindOf(entries) {
     if (types.includes('won')) return 'win';
     if (types.includes('lost')) return 'boom';
 
-    const cut = entries.findLast((entry) => ['dual_cut', 'solo_cut', 'double_detector'].includes(entry.type));
+    const cut = entries.findLast((entry) => ['dual_cut', 'solo_cut', 'double_detector', 'triple_detector', 'super_detector'].includes(entry.type));
     if (!cut) return null;
     if (cut.type === 'solo_cut' || cut.success) return 'snip';
 
@@ -102,7 +102,7 @@ const BUBBLE = {
             <span
                 v-for="(piece, i) in confetti"
                 :key="i"
-                class="absolute top-0 h-4 w-2.5 rounded-sm border border-ink"
+                class="absolute top-0 h-4 w-2.5 rounded-sm border border-line"
                 :class="piece.color"
                 :style="{ left: piece.left, '--spin': piece.spin, animation: `confetti 2.6s ease-in ${piece.delay} forwards` }"
             />
@@ -121,7 +121,7 @@ const BUBBLE = {
                     </span>
                 </template>
                 <div
-                    class="animate-burst flex flex-col items-center rounded-[2rem] border-4 border-ink px-8 py-4 shadow-[0_8px_0_var(--color-ink)]"
+                    class="animate-burst flex flex-col items-center rounded-[2rem] border-4 border-line px-8 py-4 shadow-[0_8px_0_var(--color-line)]"
                     :class="BUBBLE[fx.kind].tone"
                 >
                     <span class="text-7xl" :class="fx.kind === 'snip' ? 'animate-snip inline-block' : ''">{{ BUBBLE[fx.kind].emoji }}</span>
