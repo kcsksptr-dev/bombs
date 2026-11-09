@@ -225,3 +225,26 @@ real environment variables, so `phpunit.xml` overrides each test value with both
   rebuild everything from server state when a device comes back.
 - Base-game rules cover 2–5 players. Scaling to 6–8 (wire distribution, detonator length, etc.) is a design decision
   of this edition. Keep those numbers in `config/bombbusters.php` rather than scattering them through the code.
+
+## Future: more board games (planned, not started)
+
+The plan is to add more games later with a game switcher in the room, **in this repo** (not one repo per game). The
+platform part is already game-agnostic and should be shared: guest players, rooms/QR/lobby/seats, `RoomPresence`,
+`useServerActions`, push and nudges, undo snapshots, the "state only through a view" rule, i18n, the design system,
+Docker and `make public`.
+
+When the second game arrives (not before, so the shared parts are found rather than guessed):
+
+1. Move Bomb Busters into its own namespace/folder (`app/Games/BombBusters/…`, `pages/Games/BombBusters/…`,
+   its config and missions), keeping the engine pure as now.
+2. Define a small game contract each game implements, e.g. `deal(players, settings)`,
+   `apply(state, actor, action)`, `viewFor(state, viewer)`, plus its player range and lobby settings form.
+3. Add `rooms.game` (default `'bombbusters'`); the host picks the game in the lobby like the mission today.
+   Key campaign progress (`mission_completions`) by game too.
+4. Make `GameService` and `LobbyService` call the selected game through the contract instead of `GameEngine`
+   directly.
+5. Prefix each game's translation keys (or split dictionaries per game); both languages still required.
+
+Only split into separate repos/packages if a game needs a different stack, separate owners or independent deploys.
+The GitHub repo (`kcsksptr-dev/bombs`) can be renamed to something generic then; GitHub redirects the old URL,
+but update the local `origin`.
