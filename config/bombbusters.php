@@ -16,8 +16,6 @@ return [
 
     'max_players' => 8,
 
-    'default_capacity' => 4,
-
     /*
     |--------------------------------------------------------------------------
     | Wires
@@ -63,7 +61,7 @@ return [
     | Shared team gadgets, each usable once, by the player whose turn it is;
     | using one doesn't end the turn. 'unlock' is the card's number, used by the
     | cut_pair / cut_all unlock rules (see config/missions.php). Effects are
-    | implemented in App\Game\GameEngine::useEquipment().
+    | implemented in App\Games\BombBusters\GameEngine::useEquipment().
     |
     */
 

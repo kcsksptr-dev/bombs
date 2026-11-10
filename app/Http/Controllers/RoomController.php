@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\RoomStatus;
-use App\Game\GameEngine;
+use App\Games\GameRegistry;
 use App\Models\Room;
 use App\Models\RoomPlayer;
 use App\Models\User;
@@ -18,16 +18,19 @@ class RoomController extends Controller
 {
     public function __construct(
         private readonly LobbyService $lobby,
+        private readonly GameRegistry $games,
     ) {}
 
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'capacity' => ['required', 'integer'],
-            'mission' => ['required', 'integer'],
+            'mission' => ['sometimes', 'integer'],
+            'game' => ['sometimes', 'nullable', 'string', 'max:32'],
         ]);
 
-        $room = $this->lobby->create($request->user(), (int) $validated['capacity'], (int) $validated['mission']);
+        // Without a game the room opens on the game picker
+        $room = $this->lobby->create($request->user(), (int) $validated['capacity'], (int) ($validated['mission'] ?? 1), $validated['game'] ?? null);
 
         return to_route('rooms.show', $room);
     }
@@ -62,6 +65,8 @@ class RoomController extends Controller
             return to_route('rooms.game', $room);
         }
 
+        $definition = $this->games->has($room->game_key) ? $this->games->get($room->game_key) : null;
+
         return Inertia::render('Room/Lobby', [
             'room' => self::roomProps($room),
             'me' => [
@@ -72,10 +77,12 @@ class RoomController extends Controller
             // Phones can't open bombbusters.localhost, so the QR code always points at the LAN address
             'joinUrl' => $this->joinUrl($request, $room),
             'capacity' => [
-                'min' => config('bombbusters.min_players'),
-                'max' => config('bombbusters.max_players'),
+                'min' => $definition?->minPlayers() ?? config('games.min_players'),
+                'max' => $definition?->maxPlayers() ?? config('games.max_players'),
             ],
-            'missions' => self::missionOptions($user),
+            'games' => $this->games->options(),
+            // The chosen game's settings (Bomb Busters: the mission picker)
+            'settings' => $definition && $me ? $definition->lobbyProps($room, $user) : (object) [],
         ]);
     }
 
@@ -106,6 +113,17 @@ class RoomController extends Controller
     {
         $validated = $request->validate(['capacity' => ['required', 'integer']]);
         $this->lobby->setCapacity($room, $request->user(), (int) $validated['capacity']);
+
+        return back();
+    }
+
+    /**
+     * Host picks the game on the picker; an empty game goes back to the picker.
+     */
+    public function chooseGame(Request $request, Room $room): RedirectResponse
+    {
+        $validated = $request->validate(['game' => ['present', 'nullable', 'string', 'max:32']]);
+        $this->lobby->chooseGame($room, $request->user(), $validated['game']);
 
         return back();
     }
@@ -157,6 +175,7 @@ class RoomController extends Controller
             'code' => $room->code,
             'status' => $room->status,
             'capacity' => $room->capacity,
+            'game' => $room->game_key,
             'mission' => $room->mission,
             'hostId' => $room->host_user_id,
             'players' => $room->players->map(fn (RoomPlayer $player) => [
@@ -165,40 +184,6 @@ class RoomController extends Controller
                 'seat' => $player->seat,
                 'ready' => $player->is_ready,
             ])->values(),
-        ];
-    }
-
-    /**
-     * The campaign as the mission picker shows it: every mission's rules, plus this player's progress.
-     *
-     * @return array{missions: list<array<string, mixed>>, detonator: array<int, int>, completed: list<int>, next: int}
-     */
-    public static function missionOptions(User $viewer): array
-    {
-        $completed = $viewer->completedMissions();
-        $numbers = array_keys(config('missions'));
-
-        return [
-            'missions' => array_map(function (int $number) {
-                $mission = GameEngine::mission($number);
-
-                return [
-                    'number' => $number,
-                    'detonatorBonus' => $mission['detonator_bonus'],
-                    'yellow' => $mission['yellow'],
-                    'red' => $mission['red'],
-                    'sequence' => $mission['sequence'],
-                    'equipment' => [
-                        'count' => count($mission['equipment']['cards'] ?? []) ?: $mission['equipment']['count'],
-                        'cards' => $mission['equipment']['cards'] ?? null,
-                        'rule' => $mission['equipment']['rule'],
-                    ],
-                ];
-            }, $numbers),
-            'detonator' => config('bombbusters.detonator'),
-            'completed' => $completed,
-            // First mission this player hasn't won yet (or the last one, once the campaign is done)
-            'next' => collect($numbers)->first(fn (int $number) => ! in_array($number, $completed, true)) ?? max($numbers),
         ];
     }
 

@@ -2,8 +2,8 @@
 
 namespace Tests\Unit;
 
-use App\Game\GameEngine;
-use App\Game\GameRuleException;
+use App\Games\BombBusters\GameEngine;
+use App\Games\GameRuleException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Random\Engine\Mt19937;
 use Random\Randomizer;

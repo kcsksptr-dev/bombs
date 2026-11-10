@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Persists the engine state (see App\Game\GameEngine). The state holds every player's hidden
- * wires, so it is hidden from serialization; clients only ever get App\Game\GameView output.
+ * Persists the engine state (see App\Games\BombBusters\GameEngine). The state holds every player's hidden
+ * wires, so it is hidden from serialization; clients only ever get App\Games\BombBusters\GameView output.
  */
 #[Fillable(['room_id', 'state'])]
 #[Hidden(['state'])]

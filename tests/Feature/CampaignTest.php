@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\RoomUpdated;
-use App\Game\GameEngine;
+use App\Games\BombBusters\GameEngine;
 use App\Models\MissionCompletion;
 use App\Models\Room;
 use App\Models\User;
@@ -80,9 +80,9 @@ class CampaignTest extends TestCase
         $this->actingAs($anna)->post("/rooms/{$room->code}/game/next-mission")->assertRedirect("/rooms/{$room->code}");
         $this->assertSame(4, $room->fresh()->mission);
 
-        $this->actingAs($bence)->get('/')->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('missions.completed', [3])
-            ->where('missions.next', 1));
+        $this->actingAs($bence)->get("/rooms/{$room->code}")->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('settings.missions.completed', [3])
+            ->where('settings.missions.next', 1));
     }
 
     public function test_next_mission_does_not_skip_ahead_after_a_loss(): void
@@ -103,16 +103,24 @@ class CampaignTest extends TestCase
         $this->assertSame(0, MissionCompletion::count());
     }
 
-    public function test_the_home_screen_suggests_the_first_unfinished_mission(): void
+    public function test_picking_bomb_busters_starts_at_the_hosts_first_unfinished_mission(): void
     {
         $user = User::factory()->create();
         MissionCompletion::create(['user_id' => $user->id, 'mission' => 1, 'completed_at' => now()]);
         MissionCompletion::create(['user_id' => $user->id, 'mission' => 2, 'completed_at' => now()]);
 
-        $this->actingAs($user)->get('/')->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('missions.next', 3)
-            ->where('missions.completed', [1, 2])
-            ->has('missions.missions', count(config('missions'))));
+        $this->actingAs($user)->post('/rooms', ['capacity' => 4]);
+        $room = Room::firstOrFail();
+        $this->assertNull($room->game_key);
+
+        $this->actingAs($user)->post("/rooms/{$room->code}/choose-game", ['game' => 'bombbusters'])->assertSessionHasNoErrors();
+        $this->assertSame(3, $room->fresh()->mission);
+
+        $this->actingAs($user)->get("/rooms/{$room->code}")->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('room.game', 'bombbusters')
+            ->where('settings.missions.next', 3)
+            ->where('settings.missions.completed', [1, 2])
+            ->has('settings.missions.missions', count(config('missions'))));
     }
 
     /**
@@ -124,7 +132,7 @@ class CampaignTest extends TestCase
     {
         [$anna, $bence] = User::factory()->count(2)->create()->all();
         $lobby = app(LobbyService::class);
-        $room = $lobby->create($anna, 2, $mission);
+        $room = $lobby->create($anna, 2, $mission, game: 'bombbusters');
         $lobby->join($room, $bence);
         $lobby->setReady($room, $bence, true);
         $lobby->start($room, $anna);

@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\BombBustersController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LocaleController;
+use App\Http\Controllers\MoonwellController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\RoomController;
@@ -26,23 +28,25 @@ Route::middleware('auth')->group(function () {
     Route::prefix('/rooms/{room}')->middleware('throttle:play')->name('rooms.')->group(function () {
         Route::get('/', [RoomController::class, 'show'])->name('show');
         Route::get('/game', [GameController::class, 'show'])->name('game');
-        Route::post('/game/info-token', [GameController::class, 'infoToken'])->name('game.info-token');
-        Route::post('/game/dual-cut', [GameController::class, 'dualCut'])->name('game.dual-cut');
-        Route::post('/game/solo-cut', [GameController::class, 'soloCut'])->name('game.solo-cut');
-        Route::post('/game/pass', [GameController::class, 'pass'])->name('game.pass');
-        Route::post('/game/double-detector', [GameController::class, 'doubleDetector'])->name('game.double-detector');
-        Route::post('/game/detector-reveal', [GameController::class, 'revealForDetector'])->name('game.detector-reveal');
-        Route::post('/game/reveal-red', [GameController::class, 'revealRed'])->name('game.reveal-red');
-        Route::post('/game/walkie', [GameController::class, 'answerWalkie'])->name('game.walkie');
-        Route::post('/game/equipment/{equipment}/cancel', [GameController::class, 'cancelEquipment'])->name('game.equipment.cancel');
-        Route::post('/game/equipment/{equipment}', [GameController::class, 'useEquipment'])->name('game.equipment');
+        Route::post('/game/info-token', [BombBustersController::class, 'infoToken'])->name('game.info-token');
+        Route::post('/game/dual-cut', [BombBustersController::class, 'dualCut'])->name('game.dual-cut');
+        Route::post('/game/solo-cut', [BombBustersController::class, 'soloCut'])->name('game.solo-cut');
+        Route::post('/game/pass', [BombBustersController::class, 'pass'])->name('game.pass');
+        Route::post('/game/double-detector', [BombBustersController::class, 'doubleDetector'])->name('game.double-detector');
+        Route::post('/game/detector-reveal', [BombBustersController::class, 'revealForDetector'])->name('game.detector-reveal');
+        Route::post('/game/reveal-red', [BombBustersController::class, 'revealRed'])->name('game.reveal-red');
+        Route::post('/game/walkie', [BombBustersController::class, 'answerWalkie'])->name('game.walkie');
+        Route::post('/game/equipment/{equipment}/cancel', [BombBustersController::class, 'cancelEquipment'])->name('game.equipment.cancel');
+        Route::post('/game/equipment/{equipment}', [BombBustersController::class, 'useEquipment'])->name('game.equipment');
+        Route::post('/game/take', [MoonwellController::class, 'take'])->name('game.take');
         Route::post('/game/nudge/{user}', [GameController::class, 'nudge'])->name('game.nudge');
         Route::post('/game/undo', [GameController::class, 'undo'])->name('game.undo');
         Route::post('/game/lobby', [GameController::class, 'returnToLobby'])->name('game.lobby');
-        Route::post('/game/next-mission', [GameController::class, 'nextMission'])->name('game.next-mission');
+        Route::post('/game/next-mission', [BombBustersController::class, 'nextMission'])->name('game.next-mission');
         Route::post('/seat', [RoomController::class, 'seat'])->name('seat');
         Route::post('/ready', [RoomController::class, 'ready'])->name('ready');
         Route::post('/capacity', [RoomController::class, 'capacity'])->name('capacity');
+        Route::post('/choose-game', [RoomController::class, 'chooseGame'])->name('choose-game');
         Route::post('/mission', [RoomController::class, 'mission'])->name('mission');
         Route::post('/kick/{user}', [RoomController::class, 'kick'])->name('kick');
         Route::post('/host/{user}', [RoomController::class, 'transferHost'])->name('host');

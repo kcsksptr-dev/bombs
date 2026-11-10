@@ -1,7 +1,7 @@
 <script setup>
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import { EQUIPMENT_ICON, EQUIPMENT_INPUT } from '../../game';
+import { EQUIPMENT_ICON, EQUIPMENT_INPUT } from '../../bombbusters/game';
 import { useT } from '../../i18n';
 
 /**

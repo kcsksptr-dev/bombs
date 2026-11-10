@@ -6,7 +6,7 @@
 |--------------------------------------------------------------------------
 |
 | The campaign, numbered from 1. Each mission is pure data, read by
-| App\Game\GameEngine::start(); add or change missions here without touching code.
+| App\Games\BombBusters\GameEngine::start(); add or change missions here without touching code.
 | Names and briefings live in lang/{en,hu}.json under "mission.{number}.name"
 | and "mission.{number}.briefing" (a test checks every mission has both).
 |

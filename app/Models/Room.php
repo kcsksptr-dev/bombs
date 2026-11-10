@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['code', 'host_user_id', 'capacity', 'mission', 'last_captain_seat', 'status', 'started_at'])]
+#[Fillable(['code', 'host_user_id', 'capacity', 'game_key', 'mission', 'last_captain_seat', 'status', 'started_at'])]
 class Room extends Model
 {
     /**

@@ -50,7 +50,7 @@ class GameTest extends TestCase
         $hands = $room->game->state['hands'];
 
         $this->actingAs($anna)->get("/rooms/{$room->code}/game")->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('Room/Game')
+            ->component('Games/BombBusters/Game')
             ->where('game.stands.0.isMe', true)
             ->where('game.stands.0.wires', fn ($wires) => collect($wires)->pluck('value')->all() === array_column($hands[$anna->id], 'value'))
             ->where('game.stands.1.wires', fn ($wires) => collect($wires)->every(fn ($wire) => $wire['value'] === null && $wire['color'] === null))
@@ -381,7 +381,7 @@ class GameTest extends TestCase
     {
         $users = User::factory()->count($players)->create();
         $lobby = app(LobbyService::class);
-        $room = $lobby->create($users->first(), max($players, 2), $mission);
+        $room = $lobby->create($users->first(), max($players, 2), $mission, game: 'bombbusters');
 
         foreach ($users->skip(1) as $user) {
             $lobby->join($room, $user);

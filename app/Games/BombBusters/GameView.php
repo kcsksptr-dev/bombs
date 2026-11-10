@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Game;
+namespace App\Games\BombBusters;
 
 /**
  * Projects the authoritative state onto what one player may see. This is the only way game

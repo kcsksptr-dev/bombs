@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\RoomStatus;
 use App\Events\RoomUpdated;
+use App\Games\GameRegistry;
 use App\Models\Room;
 use App\Models\RoomPlayer;
 use App\Models\User;
@@ -20,18 +21,27 @@ class LobbyService
 {
     public function __construct(
         private readonly GameService $games,
+        private readonly GameRegistry $registry,
     ) {}
 
-    public function create(User $host, int $capacity, int $mission = 1): Room
+    /**
+     * A new room starts on the game picker ($game null) unless a game is given.
+     */
+    public function create(User $host, int $capacity, int $mission = 1, ?string $game = null): Room
     {
         $this->assertValidCapacity($capacity);
         $this->assertValidMission($mission);
 
-        return DB::transaction(function () use ($host, $capacity, $mission) {
+        if ($game !== null && ! $this->registry->has($game)) {
+            $this->fail('lobby.errors.invalid_game');
+        }
+
+        return DB::transaction(function () use ($host, $capacity, $mission, $game) {
             $room = Room::create([
                 'code' => $this->generateCode(),
                 'host_user_id' => $host->id,
                 'capacity' => $capacity,
+                'game_key' => $game,
                 'mission' => $mission,
                 'status' => RoomStatus::Lobby,
             ]);
@@ -138,14 +148,57 @@ class LobbyService
                 $this->fail('lobby.errors.capacity_below_players');
             }
 
-            // Shrinking the table: pull players sitting beyond the new capacity into the free seats
-            $free = collect(range(1, $capacity))->diff($room->players->pluck('seat'))->values();
+            if ($room->game_key) {
+                $game = $this->registry->get($room->game_key);
 
-            foreach ($room->players->where('seat', '>', $capacity)->values() as $index => $player) {
-                $player->update(['seat' => $free[$index]]);
+                if ($capacity < $game->minPlayers() || $capacity > $game->maxPlayers()) {
+                    $this->fail('lobby.errors.invalid_capacity', ['min' => $game->minPlayers(), 'max' => $game->maxPlayers()]);
+                }
             }
 
-            $room->update(['capacity' => $capacity]);
+            $this->resize($room, $capacity);
+        });
+    }
+
+    /**
+     * Shrinking the table pulls players sitting beyond the new capacity into the free seats.
+     */
+    private function resize(Room $room, int $capacity): void
+    {
+        $free = collect(range(1, $capacity))->diff($room->players->pluck('seat'))->values();
+
+        foreach ($room->players->where('seat', '>', $capacity)->values() as $index => $player) {
+            $player->update(['seat' => $free[$index]]);
+        }
+
+        $room->update(['capacity' => $capacity]);
+    }
+
+    /**
+     * Host picks the game (null goes back to the picker). The table size is pulled into the
+     * game's player range; a table already too big for the game can't pick it.
+     */
+    public function chooseGame(Room $room, User $host, ?string $game): void
+    {
+        $definition = $game === null ? null : $this->registry->get($game);
+
+        $this->mutate($room, function (Room $room) use ($host, $game, $definition) {
+            $this->assertHost($room, $host);
+            $this->assertInLobby($room);
+
+            if (! $definition) {
+                $room->update(['game_key' => null]);
+
+                return;
+            }
+
+            if ($room->players->count() > $definition->maxPlayers()) {
+                $this->fail('lobby.errors.too_many_for_game', ['max' => $definition->maxPlayers()]);
+            }
+
+            $capacity = min(max($room->capacity, $definition->minPlayers()), $definition->maxPlayers());
+            $this->resize($room, $capacity);
+            $room->update(['game_key' => $game] + $definition->chosen($room, $host));
         });
     }
 
@@ -167,8 +220,10 @@ class LobbyService
             $this->assertHost($room, $host);
             $this->assertInLobby($room);
 
-            if ($room->players->count() < config('bombbusters.min_players')) {
-                $this->fail('lobby.errors.not_enough_players', ['min' => config('bombbusters.min_players')]);
+            $game = $this->registry->for($room);
+
+            if ($room->players->count() < $game->minPlayers()) {
+                $this->fail('lobby.errors.not_enough_players', ['min' => $game->minPlayers()]);
             }
 
             if ($room->players->contains(fn (RoomPlayer $player) => ! $player->is_ready && $player->user_id !== $room->host_user_id)) {
@@ -238,10 +293,10 @@ class LobbyService
 
     private function assertValidCapacity(int $capacity): void
     {
-        if ($capacity < config('bombbusters.min_players') || $capacity > config('bombbusters.max_players')) {
+        if ($capacity < config('games.min_players') || $capacity > config('games.max_players')) {
             $this->fail('lobby.errors.invalid_capacity', [
-                'min' => config('bombbusters.min_players'),
-                'max' => config('bombbusters.max_players'),
+                'min' => config('games.min_players'),
+                'max' => config('games.max_players'),
             ]);
         }
     }

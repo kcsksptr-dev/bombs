@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A web version of the co-op board game Bomb Busters. Players use their phones on the same local network, and one
-machine runs the Docker stack behind the shared local Traefik proxy (`/opt/projects/dev/traefik`). Stack: Laravel 13
-on PHP 8.5, Inertia v3 and Vue 3 (`<script setup>`, plain JS), Tailwind 4, Laravel Reverb for WebSockets,
+"Family Games": board games played on phones around one table. Two games so far: Bomb Busters (a web version of the
+co-op board game) and Moonwell Garden (an original tile-drafting race). Players use their phones on the same local
+network, and one machine runs the Docker stack behind the shared local Traefik proxy (`/opt/projects/dev/traefik`).
+Stack: Laravel 13 on PHP 8.5, Inertia v3 and Vue 3 (`<script setup>`, plain JS), Tailwind 4, Laravel Reverb for WebSockets,
 PostgreSQL 18 and Redis 8.
 
 ## Commands
@@ -93,18 +94,54 @@ use), `bombbusters.<ip>.nip.io` and `*.trycloudflare.com` (the public tunnel). O
   `components/RoomPresence.vue` wraps the channel: online members, server updates, and a resync after the socket
   reconnects or the phone screen wakes.
 - Rooms: `Room` (code is the route key, matched case-insensitively; status is the `RoomStatus` enum
-  lobby/playing/finished) and `RoomPlayer` (seat 1..capacity, `is_ready`). Player limits and the code alphabet live in
-  `config/bombbusters.php`. Rooms support 2–8 players; the printed game is 2–5, and 6+ uses this edition's scaled
-  rules.
-- Inertia pages are in `resources/js/pages/` (`Home`, `Room/Lobby`, `Room/Game`)
-  and use `layouts/AppLayout.vue` (header with the language toggle). `RoomController::roomProps()` is the public room
-  payload, so never put hidden data there.
+  lobby/playing/finished) and `RoomPlayer` (seat 1..capacity, `is_ready`). Room size limits live in
+  `config/games.php`, the code alphabet in `config/bombbusters.php`. Rooms support 2–8 players.
+- **Inertia pages** are in `resources/js/pages/` (`Home`, `Room/Lobby`, `Games/BombBusters/Game`,
+  `Games/Moonwell/Game`) and use `layouts/AppLayout.vue` (header with the language toggle; its `game` prop shows the
+  chosen game's name under the logo). `RoomController::roomProps()` is the public room payload, so never put hidden
+  data there.
 - QR and join links use `config('bombbusters.lan_ip')` (the `LAN_IP` env from make), never the request host,
   because `bombbusters.localhost` doesn't resolve on phones.
 
+## Games (the platform part)
+
+- **A room plays one game: `rooms.game_key`** (a key of `config('games.available')`). A new room has none, and the
+  lobby shows `components/GamePicker.vue` until the host picks one (`POST …/choose-game`, `LobbyService::chooseGame()`;
+  `game: null` goes back to the picker). Picking pulls the table size into the game's player range. `start()`
+  refuses a room without a game.
+- **`App\Games\GameDefinition`** is the contract each game implements: player range, Inertia page, `deal()`,
+  `view()` (the only way state reaches a client), `waitingFor()` (push), `afterMove()` / `beforeUndo()` /
+  `markUndone()`, `backToLobby()`, `chosen()` (room columns set on picking) and `lobbyProps()` (the lobby's
+  `settings` prop). `App\Games\GameRegistry` resolves them; `App\Games\Seating` passes the first turn round the
+  table between games. Every state has `phase` and `order`.
+- **`App\Services\GameService` is game-agnostic**: `move($room, $gameKey, $closure)` locks, runs the move, snapshots
+  for undo and broadcasts; undo, nudges and back-to-lobby are shared (`GameController`). Each game's moves live in its
+  own controller (`BombBustersController`, `MoonwellController`), and the key check stops one game's endpoint from
+  touching another game's state.
+- **Adding a game:** a definition + pure engine under `app/Games/<Name>/`, its config, a controller with its move
+  routes under `/rooms/{room}/game/…`, a page in `pages/Games/<Name>/`, card art in `GamePicker.vue`, an icon in
+  `AppLayout.vue`, and `games.<key>.*` plus its own prefixed keys in both dictionaries.
+
+## Moonwell Garden
+
+- An original game (name, rules and art are ours; it doesn't copy any published game's look). Rules:
+  `App\Games\Moonwell\MoonwellEngine` (pure, state shape documented in the class); numbers per table size, wish
+  layouts by moon cost: `config/moonwell.php`. Tests: `tests/Unit/MoonwellEngineTest.php`, `tests/Feature/MoonwellTest.php`.
+- Tiles lie in a ring; the pawn furthest back on the time path plays (tie: last to arrive). Take one of the next
+  `choices` tiles after the lantern, pay its moon cost in time, plant it next to your garden. A wish (corner of a
+  tile) comes true when the tile's four neighbours include all its shapes; each one costs a firefly; first to place
+  them all wins, or fewest left when the bag runs out. 6–8 players get a 15-slot ring and 4 choices.
+- Everything is public except the bag order (the view sends only its size).
+- Frontend: `resources/js/moonwell/art.js` (colours, one shape per colour for colour-blind play, tile geometry) and
+  `components/moonwell/*` (SVG: `MwDefs` must be mounted once per page for gradients and filters). Pawns glide with
+  CSS transforms on SVG groups; new tiles pop and new fireflies fly in (`mw-*` classes in `app.css`, off with
+  reduced motion).
+- The current balance (tile counts, fireflies) comes from a greedy-bot simulation: about 10–14 turns each. Tune after
+  real playtests.
+
 ## Game engine
 
-- **`App\Game\GameEngine` holds the rules as pure functions over a plain-array state.** Each method takes a state
+- **`App\Games\BombBusters\GameEngine` holds the rules as pure functions over a plain-array state.** Each method takes a state
   and returns the next one, or throws `GameRuleException` with a translation key. It has no DB, HTTP or
   broadcasting, so rules are unit-tested directly (`tests/Unit/GameEngineTest.php`). The state shape and the wire
   model are documented at the top of the class.
@@ -130,17 +167,17 @@ use), `bombbusters.<ip>.nip.io` and `*.trycloudflare.com` (the public tunnel). O
   and the X or Y Ray *are* the cut action (shared `detect()` / `cutNaming()`), and the Coffee Mug hands the turn on.
   Walkie-Talkies set `pending` = `walkie` until the teammate answers (`answerWalkie()`, `POST …/game/walkie`); both
   stands are then re-sorted and labels whose wires split up are dropped. The old single `label` card still works for
-  games dealt before the change. The UI input per card is `EQUIPMENT_INPUT` in `resources/js/game.js`.
+  games dealt before the change. The UI input per card is `EQUIPMENT_INPUT` in `resources/js/bombbusters/game.js`.
   ⚠️ Never rebuild the user-id-keyed maps (`detectors`, `hands`, `info_placed`) with `[...$map]`: spreading renumbers
   integer keys (this once wiped every player's Double Detector).
   `detonator.ticked` counts every mistake ever, for after_mistake (the Rewinder doesn't undo it).
   Cards are cancellable before they act: instant ones ask "Use it now?", Post-it/Label pick a wire and then confirm.
   A switched-on Stabilizer can be switched off again (`cancelEquipment()`, `POST …/game/equipment/stabilizer/cancel`)
   until a wrong cut spends it; the others reveal or change something at once, so only the host's undo takes them back.
-  `components/game/EquipmentGuide.vue` lists the whole catalog (shared prop `equipmentCatalog`) in the mission picker
-  and on the game's equipment tab. A new card needs its icon and input in `resources/js/game.js` and its texts in both
+  `components/bombbusters/EquipmentGuide.vue` lists the whole catalog (shared prop `equipmentCatalog`) in the mission picker
+  and on the game's equipment tab. A new card needs its icon and input in `resources/js/bombbusters/game.js` and its texts in both
   dictionaries.
-- **Campaign progress:** a win records `mission_completions` for every player (`GameService::recordCompletion`).
+- **Campaign progress:** a win records `mission_completions` for every player (`BombBusters::afterMove()`).
   After a win, the host's "Next mission" (`POST …/game/next-mission`) returns to the lobby with mission + 1. It never
   advances after a loss.
 - **Persistence and moves:** `games.state` (JSON, one row per room) stores everything, including hidden wires.
@@ -148,7 +185,7 @@ use), `bombbusters.<ip>.nip.io` and `*.trycloudflare.com` (the public tunnel). O
   turning `GameRuleException` into a translated `errors.game`. `LobbyService::start()` deals the game. The host
   captains a room's first game; `rooms.last_captain_seat` then passes it to the next seat after every game, however
   it ended.
-- **Undo:** `GameService::apply()` stores the state before every move in `game_snapshots`; the host's
+- **Undo:** `GameService::move()` stores the state before every move in `game_snapshots`; the host's
   `POST …/game/undo` pops the latest one, step by step, also after a win or loss (an undone win removes the
   `mission_completions` it recorded). The restored state gets a public `undo` log entry, so everyone sees it. There
   is no redo. Snapshots hold hidden wires, so only their count (`game.undoSteps`) reaches clients.
@@ -159,9 +196,9 @@ use), `bombbusters.<ip>.nip.io` and `*.trycloudflare.com` (the public tunnel). O
   the site on the Home Screen. Keys are `VAPID_*` in `.environment/.env.local`. Endpoints are allow-listed
   (`PushSubscription::ENDPOINT_RULE`) because the server POSTs to them. After env changes during a tunnel session, use
   `make public-reload`; `make restart` would drop `APP_DEBUG=false`.
-- **`App\Game\GameView::for($state, $viewer, …)`** is the only way state reaches a client. Hidden wires carry
+- **`App\Games\BombBusters\GameView::for($state, $viewer, …)`** is the only way state reaches a client. Hidden wires carry
   neither value nor colour, and the cut board shows yellow/red totals but not which values. `GameTest` asserts
-  this. The `log` holds structured public events; `components/game/GameLog.vue` turns them into sentences in the
+  this. The `log` holds structured public events; `components/bombbusters/GameLog.vue` turns them into sentences in the
   reader's language, and `CutFx.vue` animates new ones (snip / miss / boom / win; off with reduced motion).
 - **Double Detector** (each player's one use per game, `GameEngine::doubleDetector()`): point at two wires on one
   teammate's stand and name a kind. If either matches, it's cut (the left one if both match). On a miss the detonator
@@ -226,24 +263,12 @@ real environment variables, so `phpunit.xml` overrides each test value with both
 - Base-game rules cover 2–5 players. Scaling to 6–8 (wire distribution, detonator length, etc.) is a design decision
   of this edition. Keep those numbers in `config/bombbusters.php` rather than scattering them through the code.
 
-## Future: more board games (planned, not started)
+## Still to do for more games
 
-The plan is to add more games later with a game switcher in the room, **in this repo** (not one repo per game). The
-platform part is already game-agnostic and should be shared: guest players, rooms/QR/lobby/seats, `RoomPresence`,
-`useServerActions`, push and nudges, undo snapshots, the "state only through a view" rule, i18n, the design system,
-Docker and `make public`.
-
-When the second game arrives (not before, so the shared parts are found rather than guessed):
-
-1. Move Bomb Busters into its own namespace/folder (`app/Games/BombBusters/…`, `pages/Games/BombBusters/…`,
-   its config and missions), keeping the engine pure as now.
-2. Define a small game contract each game implements, e.g. `deal(players, settings)`,
-   `apply(state, actor, action)`, `viewFor(state, viewer)`, plus its player range and lobby settings form.
-3. Add `rooms.game` (default `'bombbusters'`); the host picks the game in the lobby like the mission today.
-   Key campaign progress (`mission_completions`) by game too.
-4. Make `GameService` and `LobbyService` call the selected game through the contract instead of `GameEngine`
-   directly.
-5. Prefix each game's translation keys (or split dictionaries per game); both languages still required.
+- `mission_completions` is Bomb Busters only; key it by game if another game gets a campaign.
+- Bomb Busters' translation keys (`game.*`, `mission.*`, …) are still unprefixed; new games prefix theirs
+  (`moonwell.*`). Shared game-page texts (`game.your_turn`, `game.undo`, `game.back_to_lobby`, `nudge.*`) are reused.
+- `config/bombbusters.php` still holds shared things (room code alphabet, `lan_ip`, push cooldown).
 
 Only split into separate repos/packages if a game needs a different stack, separate owners or independent deploys.
 The GitHub repo (`kcsksptr-dev/bombs`) can be renamed to something generic then; GitHub redirects the old URL,

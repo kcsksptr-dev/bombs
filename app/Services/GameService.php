@@ -4,107 +4,85 @@ namespace App\Services;
 
 use App\Enums\RoomStatus;
 use App\Events\RoomUpdated;
-use App\Game\GameEngine;
-use App\Game\GameRuleException;
+use App\Games\GameRegistry;
+use App\Games\GameRuleException;
 use App\Jobs\SendPush;
 use App\Models\Game;
-use App\Models\GameSnapshot;
-use App\Models\MissionCompletion;
 use App\Models\Room;
-use App\Models\RoomPlayer;
 use App\Models\User;
 use Closure;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Applies engine moves to a room's stored game. Same pattern as LobbyService: lock the game row,
- * run the pure engine, save, then tell the room something changed (no state in the broadcast).
+ * Applies moves to a room's stored game, whatever the game. Same pattern as LobbyService: lock the
+ * game row, run the game's pure engine, save, then tell the room something changed (no state in the
+ * broadcast). Game-specific parts go through the room's GameDefinition.
  */
 class GameService
 {
     public function __construct(
-        private readonly GameEngine $engine,
+        private readonly GameRegistry $games,
     ) {}
 
     /**
-     * Deal a fresh game for the room's current seating and mission. Called inside the lobby's
+     * Deal a fresh game for the room's current seating and settings. Called inside the lobby's
      * start transaction.
      */
     public function create(Room $room): Game
     {
-        $players = $room->players->sortBy('seat');
-        $order = $players->pluck('user_id')->all();
+        $order = $room->players->sortBy('seat')->pluck('user_id')->values()->all();
 
         $game = $room->game()->updateOrCreate([], [
-            'state' => $this->engine->start($order, $this->nextCaptain($room, $players), $room->mission),
+            'state' => $this->games->for($room)->deal($room, $order),
         ]);
         $game->snapshots()->delete();
 
         return $game;
     }
 
-    public function placeInfoToken(Room $room, User $user, int $index): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->placeInfoToken($state, $user->id, $index));
-    }
-
-    public function dualCut(Room $room, User $user, int $target, int $index, int|string $kind): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->dualCut($state, $user->id, $target, $index, $kind));
-    }
-
-    public function soloCut(Room $room, User $user, int|string $kind): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->soloCut($state, $user->id, $kind));
-    }
-
     /**
-     * @param  array{int, int}  $indices
+     * Runs one move of the room's game. $game guards against a request for another game's
+     * endpoint (an old tab after the room switched games).
+     *
+     * @param  Closure(array<string, mixed>): array<string, mixed>  $move
      */
-    public function doubleDetector(Room $room, User $user, int $target, array $indices, int|string $kind): void
+    public function move(Room $room, string $game, Closure $move): void
     {
-        $this->apply($room, fn (array $state) => $this->engine->doubleDetector($state, $user->id, $target, $indices, $kind));
-    }
+        if ($room->game_key !== $game) {
+            throw ValidationException::withMessages(['game' => __('game.errors.no_game')]);
+        }
 
-    public function revealForDetector(Room $room, User $user, int $index): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->revealForDetector($state, $user->id, $index));
-    }
+        $definition = $this->games->for($room);
 
-    public function pass(Room $room, User $user): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->pass($state, $user->id));
-    }
+        [$before, $after] = DB::transaction(function () use ($room, $move, $definition) {
+            $stored = $room->game()->lockForUpdate()->first()
+                ?? throw ValidationException::withMessages(['game' => __('game.errors.no_game')]);
 
-    public function revealRed(Room $room, User $user): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->revealRed($state, $user->id));
-    }
+            try {
+                $before = $stored->state;
+                $next = $move($before);
 
-    /**
-     * @param  array<string, mixed>  $params
-     */
-    public function useEquipment(Room $room, User $user, string $id, array $params): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->useEquipment($state, $user->id, $id, $params));
-    }
+                $stored->snapshots()->create(['state' => $before]);
+                $stored->update(['state' => $next]);
+                $definition->afterMove($before, $stored->state);
 
-    public function answerWalkie(Room $room, User $user, int $index): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->answerWalkie($state, $user->id, $index));
-    }
+                return [$before, $stored->state];
+            } catch (GameRuleException $exception) {
+                // Kinds like 'yellow' in the message get the player's word for them
+                $replace = array_map(fn ($value) => is_string($value) ? __("game.kind.{$value}") : $value, $exception->replace);
 
-    public function cancelEquipment(Room $room, User $user, string $id): void
-    {
-        $this->apply($room, fn (array $state) => $this->engine->cancelEquipment($state, $user->id, $id));
+                throw ValidationException::withMessages(['game' => __($exception->key, $replace)]);
+            }
+        });
+
+        rescue(fn () => broadcast(new RoomUpdated($room->code)));
+        $this->pushIfWaiting($room, $before, $after);
     }
 
     /**
-     * Host takes back the latest move, including one that won or lost the mission. One step per
-     * call, so a Double Detector miss and the teammate's reveal are two steps.
+     * Host takes back the latest move, including one that ended the game. One step per call.
      */
     public function undo(Room $room, User $user): void
     {
@@ -112,19 +90,18 @@ class GameService
             throw ValidationException::withMessages(['game' => __('lobby.errors.host_only')]);
         }
 
-        [$before, $after] = DB::transaction(function () use ($room, $user) {
+        $definition = $this->games->for($room);
+
+        [$before, $after] = DB::transaction(function () use ($room, $user, $definition) {
             $game = $room->game()->lockForUpdate()->first()
                 ?? throw ValidationException::withMessages(['game' => __('game.errors.no_game')]);
 
             $snapshot = $game->snapshots()->latest('id')->first()
                 ?? throw ValidationException::withMessages(['game' => __('game.errors.nothing_to_undo')]);
 
-            if ($game->state['phase'] === 'won') {
-                $this->forgetCompletion($game->state, $snapshot);
-            }
-
             $before = $game->state;
-            $game->update(['state' => $this->engine->markUndone($snapshot->state, $user->id)]);
+            $definition->beforeUndo($before, $snapshot);
+            $game->update(['state' => $definition->markUndone($snapshot->state, $user->id)]);
             $snapshot->delete();
 
             return [$before, $game->state];
@@ -156,111 +133,27 @@ class GameService
     }
 
     /**
-     * Host ends the mission (finished or abandoned) and takes everyone back to the lobby.
+     * Host ends the game (finished or abandoned) and takes everyone back to the lobby. $advance asks
+     * the game to move on (Bomb Busters: the next mission, after a win).
      */
-    public function returnToLobby(Room $room, User $user, bool $nextMission = false): void
+    public function returnToLobby(Room $room, User $user, bool $advance = false): void
     {
         if (! $room->isHost($user)) {
             throw ValidationException::withMessages(['game' => __('lobby.errors.host_only')]);
         }
 
-        DB::transaction(function () use ($room, $nextMission) {
-            $state = $room->game?->state;
-            $won = ($state['phase'] ?? null) === 'won';
-            $next = $room->mission + 1;
-            $captainSeat = $room->players()->where('user_id', $state['captain'] ?? null)->value('seat');
+        DB::transaction(function () use ($room, $advance) {
+            $changes = $room->game_key ? $this->games->for($room)->backToLobby($room, $room->game?->state, $advance) : [];
 
             $room->game()->delete();
             $room->players()->update(['is_ready' => false]);
-            $room->update([
+            $room->update($changes + [
                 'status' => RoomStatus::Lobby,
                 'started_at' => null,
-                'last_captain_seat' => $captainSeat ?? $room->last_captain_seat,
-                // Only a won mission moves the table on, and only if there is a next one
-                'mission' => $nextMission && $won && config("missions.{$next}") ? $next : $room->mission,
             ]);
         });
 
         rescue(fn () => broadcast(new RoomUpdated($room->code)));
-    }
-
-    /**
-     * The host captains a room's first game; after that it passes to the next seated player,
-     * however the previous game ended.
-     *
-     * @param  Collection<int, RoomPlayer>  $players  sorted by seat
-     */
-    private function nextCaptain(Room $room, Collection $players): int
-    {
-        if ($room->last_captain_seat === null) {
-            return $room->host_user_id;
-        }
-
-        $next = $players->first(fn (RoomPlayer $player) => $player->seat > $room->last_captain_seat) ?? $players->first();
-
-        return $next->user_id;
-    }
-
-    /**
-     * Everyone who played a won mission gets it ticked off in their campaign.
-     *
-     * @param  array<string, mixed>  $state
-     */
-    private function recordCompletion(array $state): void
-    {
-        foreach ($state['order'] as $userId) {
-            MissionCompletion::firstOrCreate(
-                ['user_id' => $userId, 'mission' => $state['mission']],
-                ['completed_at' => now()],
-            );
-        }
-    }
-
-    /**
-     * Takes back what the undone winning move recorded. Anyone who won this mission in an earlier
-     * game keeps their tick: their completion is older than the move.
-     *
-     * @param  array<string, mixed>  $state
-     */
-    private function forgetCompletion(array $state, GameSnapshot $winningMove): void
-    {
-        MissionCompletion::whereIn('user_id', $state['order'])
-            ->where('mission', $state['mission'])
-            ->where('completed_at', '>=', $winningMove->created_at)
-            ->delete();
-    }
-
-    /**
-     * @param  Closure(array<string, mixed>): array<string, mixed>  $move
-     */
-    private function apply(Room $room, Closure $move): void
-    {
-        [$before, $after] = DB::transaction(function () use ($room, $move) {
-            $game = $room->game()->lockForUpdate()->first()
-                ?? throw ValidationException::withMessages(['game' => __('game.errors.no_game')]);
-
-            try {
-                $before = $game->state;
-                $next = $move($before);
-
-                $game->snapshots()->create(['state' => $before]);
-                $game->update(['state' => $next]);
-
-                if ($before['phase'] !== 'won' && $game->state['phase'] === 'won') {
-                    $this->recordCompletion($game->state);
-                }
-
-                return [$before, $game->state];
-            } catch (GameRuleException $exception) {
-                // Kinds like 'yellow' in the message get the player's word for them
-                $replace = array_map(fn ($value) => is_string($value) ? __("game.kind.{$value}") : $value, $exception->replace);
-
-                throw ValidationException::withMessages(['game' => __($exception->key, $replace)]);
-            }
-        });
-
-        rescue(fn () => broadcast(new RoomUpdated($room->code)));
-        $this->pushIfWaiting($room, $before, $after);
     }
 
     /**
@@ -271,19 +164,12 @@ class GameService
      */
     private function pushIfWaiting(Room $room, array $before, array $after): void
     {
-        $waitingFor = $this->waitingFor($after);
+        $definition = $this->games->for($room);
+        $now = $definition->waitingFor($after);
 
-        if ($waitingFor !== null && $waitingFor !== $this->waitingFor($before)) {
-            $this->push($room, $waitingFor, ($after['pending'] ?? null) ? 'push.reveal' : 'push.turn');
+        if ($now !== null && $now[0] !== ($definition->waitingFor($before)[0] ?? null)) {
+            $this->push($room, $now[0], $now[1]);
         }
-    }
-
-    /**
-     * @param  array<string, mixed>  $state
-     */
-    private function waitingFor(array $state): ?int
-    {
-        return $state['pending']['player'] ?? ($state['phase'] === 'playing' ? $state['turn'] : null);
     }
 
     /**

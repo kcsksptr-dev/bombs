@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
-import { EQUIPMENT_ICON, EQUIPMENT_INPUT } from '../../game';
+import { EQUIPMENT_ICON, EQUIPMENT_INPUT } from '../../bombbusters/game';
 import { useT } from '../../i18n';
 
 /**

@@ -1,7 +1,6 @@
 <script setup>
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import MissionPicker from '../components/MissionPicker.vue';
 import ErrorBanner from '../components/ErrorBanner.vue';
 import AppLayout from '../layouts/AppLayout.vue';
 import { useT } from '../i18n';
@@ -9,7 +8,6 @@ import { useT } from '../i18n';
 const props = defineProps({
     activeRoom: Object,
     capacity: Object,
-    missions: Object,
 });
 
 const page = usePage();
@@ -18,7 +16,7 @@ const user = computed(() => page.props.auth.user);
 
 const nameForm = useForm({ name: user.value?.name ?? '' });
 const renaming = ref(false);
-const createForm = useForm({ capacity: props.capacity.default, mission: props.missions?.next ?? 1 });
+const createForm = useForm({ capacity: props.capacity.default });
 const joinForm = useForm({ code: '' });
 
 const sizes = computed(() => {
@@ -45,7 +43,7 @@ function startRename() {
     <Head :title="t('lobby.title')" />
 
     <AppLayout>
-        <p class="-mt-2 mb-5 text-center text-lg font-medium text-ink-soft">{{ t('app.tagline') }} ✂️</p>
+        <p class="-mt-2 mb-5 text-center text-lg font-medium text-ink-soft">{{ t('app.tagline') }} 🎲</p>
 
         <!-- First visit: the device gets a guest player -->
         <form v-if="!user || renaming" class="card animate-pop flex flex-col gap-3" @submit.prevent="saveName">
@@ -111,9 +109,7 @@ function startRename() {
                     <p v-if="createForm.capacity >= 6" class="text-sm text-ink-soft">✨ {{ t('home.big_table_note') }}</p>
                 </div>
 
-                <MissionPicker v-model="createForm.mission" :options="missions" :players="createForm.capacity" />
-
-                <ErrorBanner :message="createForm.errors.capacity || createForm.errors.mission || createForm.errors.lobby" />
+                <ErrorBanner :message="createForm.errors.capacity || createForm.errors.lobby" />
                 <button type="submit" class="btn bg-sun text-xl" :disabled="createForm.processing" data-testid="create">
                     🚀 {{ t('home.create') }}
                 </button>

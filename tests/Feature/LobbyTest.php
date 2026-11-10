@@ -43,7 +43,7 @@ class LobbyTest extends TestCase
     {
         $host = User::factory()->create();
 
-        $response = $this->actingAs($host)->post('/rooms', ['capacity' => 6, 'mission' => 3]);
+        $response = $this->actingAs($host)->post('/rooms', ['capacity' => 6, 'mission' => 3, 'game' => 'bombbusters']);
 
         $room = Room::sole();
         $response->assertRedirect("/rooms/{$room->code}");
@@ -58,10 +58,10 @@ class LobbyTest extends TestCase
     {
         $host = User::factory()->create();
 
-        $this->actingAs($host)->post('/rooms', ['capacity' => 8, 'mission' => 1])->assertSessionHasNoErrors();
-        $this->actingAs($host)->post('/rooms', ['capacity' => 9, 'mission' => 1])->assertSessionHasErrors('lobby');
-        $this->actingAs($host)->post('/rooms', ['capacity' => 1, 'mission' => 1])->assertSessionHasErrors('lobby');
-        $this->actingAs($host)->post('/rooms', ['capacity' => 4, 'mission' => 999])->assertSessionHasErrors('lobby');
+        $this->actingAs($host)->post('/rooms', ['capacity' => 8, 'mission' => 1, 'game' => 'bombbusters'])->assertSessionHasNoErrors();
+        $this->actingAs($host)->post('/rooms', ['capacity' => 9, 'mission' => 1, 'game' => 'bombbusters'])->assertSessionHasErrors('lobby');
+        $this->actingAs($host)->post('/rooms', ['capacity' => 1, 'mission' => 1, 'game' => 'bombbusters'])->assertSessionHasErrors('lobby');
+        $this->actingAs($host)->post('/rooms', ['capacity' => 4, 'mission' => 999, 'game' => 'bombbusters'])->assertSessionHasErrors('lobby');
     }
 
     public function test_joining_takes_the_first_free_seat_and_notifies_the_room(): void
@@ -254,7 +254,7 @@ class LobbyTest extends TestCase
     private function roomWithPlayers(int $count, int $capacity = 4): Room
     {
         $users = User::factory()->count($count)->create();
-        $room = app(LobbyService::class)->create($users->first(), $capacity);
+        $room = app(LobbyService::class)->create($users->first(), $capacity, game: 'bombbusters');
 
         foreach ($users->skip(1) as $user) {
             app(LobbyService::class)->join($room, $user);

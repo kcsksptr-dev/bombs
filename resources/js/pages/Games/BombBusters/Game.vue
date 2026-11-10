@@ -1,22 +1,22 @@
 <script setup>
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import Avatar from '../../components/Avatar.vue';
-import ErrorBanner from '../../components/ErrorBanner.vue';
-import PushToggle from '../../components/PushToggle.vue';
-import RoomPresence from '../../components/RoomPresence.vue';
-import CutBoard from '../../components/game/CutBoard.vue';
-import CutFx from '../../components/game/CutFx.vue';
-import Detonator from '../../components/game/Detonator.vue';
-import EquipmentGuide from '../../components/game/EquipmentGuide.vue';
-import EquipmentPanel from '../../components/game/EquipmentPanel.vue';
-import GameLog from '../../components/game/GameLog.vue';
-import LogBubbles from '../../components/game/LogBubbles.vue';
-import WireTile from '../../components/game/WireTile.vue';
-import AppLayout from '../../layouts/AppLayout.vue';
-import { EQUIPMENT_ICON, EQUIPMENT_INPUT, kindLabel } from '../../game';
-import { useT } from '../../i18n';
-import { useServerActions } from '../../useServerActions';
+import Avatar from '../../../components/Avatar.vue';
+import ErrorBanner from '../../../components/ErrorBanner.vue';
+import PushToggle from '../../../components/PushToggle.vue';
+import RoomPresence from '../../../components/RoomPresence.vue';
+import CutBoard from '../../../components/bombbusters/CutBoard.vue';
+import CutFx from '../../../components/bombbusters/CutFx.vue';
+import Detonator from '../../../components/bombbusters/Detonator.vue';
+import EquipmentGuide from '../../../components/bombbusters/EquipmentGuide.vue';
+import EquipmentPanel from '../../../components/bombbusters/EquipmentPanel.vue';
+import GameLog from '../../../components/bombbusters/GameLog.vue';
+import LogBubbles from '../../../components/bombbusters/LogBubbles.vue';
+import WireTile from '../../../components/bombbusters/WireTile.vue';
+import AppLayout from '../../../layouts/AppLayout.vue';
+import { EQUIPMENT_ICON, EQUIPMENT_INPUT, kindLabel } from '../../../bombbusters/game';
+import { useT } from '../../../i18n';
+import { useServerActions } from '../../../useServerActions';
 
 const props = defineProps({
     room: Object,
@@ -309,7 +309,7 @@ function abort() {
 <template>
     <Head :title="`${t('game.title')} ${room.code}`" />
 
-    <AppLayout>
+    <AppLayout game="bombbusters">
         <RoomPresence :code="room.code" @online="online = $event" @changed="onChanged">
             <span class="hidden" data-testid="busy" :data-busy="busy" />
             <CutFx :log="game.log" :log-length="game.logLength" />

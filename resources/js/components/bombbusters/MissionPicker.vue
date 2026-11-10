@@ -1,8 +1,8 @@
 <script setup>
 import { computed } from 'vue';
-import { kindLabel } from '../game';
-import EquipmentGuide from './game/EquipmentGuide.vue';
-import { useT } from '../i18n';
+import { kindLabel } from '../../bombbusters/game';
+import EquipmentGuide from './EquipmentGuide.vue';
+import { useT } from '../../i18n';
 
 /**
  * Campaign mission picker: numbered bubbles (✅ won, ⭐ next up) and a card explaining the chosen

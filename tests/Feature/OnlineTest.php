@@ -40,7 +40,7 @@ class OnlineTest extends TestCase
     {
         config(['bombbusters.lan_ip' => '192.168.1.20']);
         $host = User::factory()->create();
-        $room = app(LobbyService::class)->create($host, 4);
+        $room = app(LobbyService::class)->create($host, 4, game: 'bombbusters');
 
         $this->actingAs($host)->get("/rooms/{$room->code}")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('joinUrl', "http://192.168.1.20/rooms/{$room->code}"));
@@ -79,8 +79,8 @@ class OnlineTest extends TestCase
         $lobby = app(LobbyService::class);
         [$fresh, $stale, $keeper, $gone] = User::factory()->count(4)->create()->all();
 
-        $activeRoom = $lobby->create($fresh, 4);
-        $staleRoom = $lobby->create($stale, 4);
+        $activeRoom = $lobby->create($fresh, 4, game: 'bombbusters');
+        $staleRoom = $lobby->create($stale, 4, game: 'bombbusters');
         Room::whereKey($staleRoom->id)->update(['updated_at' => now()->subDays(2), 'status' => RoomStatus::Lobby]);
 
         // Campaign progress is worth keeping even for a guest who's been gone for ages

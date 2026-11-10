@@ -18,11 +18,10 @@ class HomeController extends Controller
                 'status' => $activeRoom->status,
             ] : null,
             'capacity' => [
-                'min' => config('bombbusters.min_players'),
-                'max' => config('bombbusters.max_players'),
-                'default' => config('bombbusters.default_capacity'),
+                'min' => config('games.min_players'),
+                'max' => config('games.max_players'),
+                'default' => config('games.default_capacity'),
             ],
-            'missions' => $request->user() ? RoomController::missionOptions($request->user()) : null,
         ]);
     }
 }

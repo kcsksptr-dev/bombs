@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Game;
+namespace App\Games\BombBusters;
 
+use App\Games\GameRuleException;
 use Random\Randomizer;
 
 /**

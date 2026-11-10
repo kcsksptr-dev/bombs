@@ -1,4 +1,4 @@
-import { EQUIPMENT_ICON, kindLabel } from '../../game';
+import { EQUIPMENT_ICON, kindLabel } from '../../bombbusters/game';
 
 /**
  * Log entries are structured data from the server; turning them into sentences here keeps

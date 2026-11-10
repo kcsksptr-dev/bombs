@@ -4,6 +4,12 @@ import { computed } from 'vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
 import { useT } from '../i18n';
 
+// The room's chosen game (a key of config/games.php), shown under the logo once picked
+defineProps({
+    game: { type: String, default: null },
+});
+
+const GAME_ICONS = { bombbusters: '💣', moonwell: '🌙' };
 const page = usePage();
 const t = useT();
 const locale = computed(() => page.props.locale);
@@ -20,10 +26,15 @@ function switchLocale(next) {
     <div class="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <header class="mb-5 flex items-center justify-between gap-3">
             <a href="/" class="flex items-center gap-2" data-testid="logo">
-                <span class="animate-wiggle text-4xl drop-shadow-[0_3px_0_var(--color-line)]">💣</span>
-                <span class="flex gap-1.5 text-2xl leading-none font-bold tracking-tight">
-                    <span class="text-berry [-webkit-text-stroke:1.5px_var(--color-line)] [paint-order:stroke_fill]">Bomb</span>
-                    <span class="text-sky [-webkit-text-stroke:1.5px_var(--color-line)] [paint-order:stroke_fill]">Busters</span>
+                <span class="animate-wiggle text-4xl drop-shadow-[0_3px_0_var(--color-line)]">🎲</span>
+                <span class="flex min-w-0 flex-col gap-1">
+                    <span class="flex gap-1.5 text-2xl leading-none font-bold tracking-tight">
+                        <span class="text-berry [-webkit-text-stroke:1.5px_var(--color-line)] [paint-order:stroke_fill]">{{ t('app.brand_first') }}</span>
+                        <span class="text-sky [-webkit-text-stroke:1.5px_var(--color-line)] [paint-order:stroke_fill]">{{ t('app.brand_second') }}</span>
+                    </span>
+                    <span v-if="game" class="truncate text-sm leading-none font-bold text-ink-soft" data-testid="game-title">
+                        {{ GAME_ICONS[game] ?? '🎲' }} {{ t(`games.${game}.name`) }}
+                    </span>
                 </span>
             </a>
 

@@ -4,7 +4,9 @@ import QRCode from 'qrcode';
 import { computed, ref, watchEffect } from 'vue';
 import Avatar from '../../components/Avatar.vue';
 import PushToggle from '../../components/PushToggle.vue';
-import MissionPicker from '../../components/MissionPicker.vue';
+import MissionPicker from '../../components/bombbusters/MissionPicker.vue';
+import GamePicker from '../../components/GamePicker.vue';
+import MwDefs from '../../components/moonwell/MwDefs.vue';
 import ErrorBanner from '../../components/ErrorBanner.vue';
 import RoomPresence from '../../components/RoomPresence.vue';
 import AppLayout from '../../layouts/AppLayout.vue';
@@ -16,7 +18,8 @@ const props = defineProps({
     me: Object,
     joinUrl: String,
     capacity: Object,
-    missions: Object,
+    games: Array,
+    settings: Object,
 });
 
 const page = usePage();
@@ -29,7 +32,7 @@ const confirmLeave = ref(false);
 const qrSvg = ref('');
 
 const base = computed(() => `/rooms/${props.room.code}`);
-const { post, resync: reloadRoom } = useServerActions(() => base.value, ['room', 'me']);
+const { busy, post, resync: reloadRoom } = useServerActions(() => base.value, ['room', 'me', 'capacity', 'settings']);
 const error = computed(() => page.props.errors?.lobby);
 const seats = computed(() =>
     Array.from({ length: props.room.capacity }, (_, index) => ({
@@ -43,6 +46,8 @@ const everyoneReady = computed(() =>
 );
 const canStart = computed(() => props.me.isHost && enoughPlayers.value && everyoneReady.value);
 const minCapacity = computed(() => Math.max(props.capacity.min, props.room.players.length));
+const picking = computed(() => !props.room.game);
+const moonwellTable = computed(() => props.settings?.tables?.[props.room.capacity] ?? null);
 
 watchEffect(async () => {
     qrSvg.value = await QRCode.toString(props.joinUrl, {
@@ -85,7 +90,7 @@ async function copyLink() {
 <template>
     <Head :title="`${t('lobby.title')} ${room.code}`" />
 
-    <AppLayout>
+    <AppLayout :game="room.game">
         <!-- Not (or no longer) part of this room -->
         <section v-if="!me.isMember" class="card animate-pop flex flex-col items-center gap-4 text-center">
             <p class="label">{{ t('lobby.room_code') }}</p>
@@ -136,6 +141,27 @@ async function copyLink() {
 
             <ErrorBanner class="mb-3" :message="error" />
             <PushToggle />
+
+            <MwDefs />
+
+            <!-- New room: the host picks a game first -->
+            <GamePicker
+                v-if="picking"
+                class="mb-4"
+                :games="games"
+                :is-host="me.isHost"
+                :players="room.players.length"
+                :busy="busy"
+                @choose="post('choose-game', { game: $event })"
+            />
+
+            <template v-else>
+            <div class="mb-4 flex items-center justify-between gap-2 rounded-3xl border-[3px] border-line bg-lilac px-4 py-2.5 text-ink shadow-[0_4px_0_var(--color-line)]" data-testid="chosen-game">
+                <span class="min-w-0 truncate text-lg font-bold">{{ room.game === 'moonwell' ? '🌙' : '💣' }} {{ t(`games.${room.game}.name`) }}</span>
+                <button v-if="me.isHost" type="button" class="btn btn-sm shrink-0 bg-white text-sm" :disabled="busy" data-testid="change-game" @click="post('choose-game', { game: null })">
+                    🔄 {{ t('picker.change') }}
+                </button>
+            </div>
 
             <!-- Seats -->
             <ol class="mb-4 grid grid-cols-2 gap-3">
@@ -229,12 +255,20 @@ async function copyLink() {
                 <p v-if="room.capacity >= 6" class="chip self-start bg-lilac">✨ {{ t('lobby.extended_rules') }}</p>
 
                 <MissionPicker
+                    v-if="room.game === 'bombbusters' && settings.missions"
                     :model-value="room.mission"
-                    :options="missions"
+                    :options="settings.missions"
                     :players="room.players.length"
                     :readonly="!me.isHost"
                     @update:model-value="post('mission', { mission: $event })"
                 />
+
+                <div v-else-if="room.game === 'moonwell'" class="flex flex-col gap-2 text-sm" data-testid="moonwell-settings">
+                    <p v-if="moonwellTable" class="font-semibold">🌙 {{ t('moonwell.table_summary', moonwellTable) }}</p>
+                    <ol class="flex list-decimal flex-col gap-1 pl-5 text-ink-soft">
+                        <li v-for="n in 4" :key="n">{{ t(`moonwell.rules_${n}`) }}</li>
+                    </ol>
+                </div>
 
                 <template v-if="me.isHost">
                     <button type="button" class="btn bg-sun text-xl" :disabled="!canStart" data-testid="start" @click="post('start')">
@@ -246,6 +280,7 @@ async function copyLink() {
 
                 <p v-else class="text-center text-sm text-ink-soft">⏳ {{ t('lobby.waiting_for_host') }}</p>
             </section>
+            </template>
 
             <button
                 type="button"
